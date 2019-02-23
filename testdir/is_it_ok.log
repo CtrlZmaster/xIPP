@@ -1,0 +1,31 @@
+Archive:  xpospi95.zip
+  inflating: parse.php               
+   creating: Tests/
+   creating: Tests/Examples/
+  inflating: Tests/Examples/a1.src   
+   creating: Tests/Regex/
+ extracting: Tests/Regex/xb2.src     
+  inflating: Tests/Regex/b1.src      
+  inflating: Tests/Regex/a1.src      
+ extracting: Tests/Regex/xa1.src     
+ extracting: Tests/Regex/xa2.src     
+ extracting: Tests/Regex/xa3.src     
+  inflating: Tests/defvar-partial    
+   creating: Tests/EmptyProgs/
+ extracting: Tests/EmptyProgs/a1.in  
+  inflating: Tests/EmptyProgs/xc1.src  
+ extracting: Tests/EmptyProgs/a1.out  
+ extracting: Tests/EmptyProgs/a2.out  
+  inflating: Tests/EmptyProgs/a1.src  
+  inflating: Tests/EmptyProgs/a2.src  
+ extracting: Tests/EmptyProgs/xc1.rc  
+ extracting: Tests/EmptyProgs/xc1.out  
+ extracting: Tests/EmptyProgs/xb1.rc  
+ extracting: Tests/EmptyProgs/a1.rc  
+ extracting: Tests/EmptyProgs/xb1.src  
+ extracting: Tests/EmptyProgs/xb1.in  
+ extracting: Tests/EmptyProgs/a2.in  
+ extracting: Tests/EmptyProgs/xb1.out  
+ extracting: Tests/EmptyProgs/a2.rc  
+ extracting: Tests/EmptyProgs/xc1.in  
+This will turn into help eventually.

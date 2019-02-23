@@ -1,0 +1,6 @@
+# Empty program
+# Contains IPPcode18 header and a label
+
+.IPPcode18
+
+LABEL main

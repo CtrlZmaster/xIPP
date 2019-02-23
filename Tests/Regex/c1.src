@@ -1,0 +1,5 @@
+.IPPcode18
+PUSHS string@\032ahoj\032svete
+PUSHS string@50€
+PUSHS string@řetězec\032s\032lomítkem\032\092\032a\010novým\035řádkem
+PUSHS string@nechýba\032@\032zavináč?

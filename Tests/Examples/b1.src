@@ -1,0 +1,19 @@
+.ippCode18 #Case insensitive
+
+PUSHS     int@
+PUSHS int@-5
+PUSHS  int@10
+PUSHS int@354789
+PUSHS int@000
+
+        DEFVAR LF@var1 # Alnum
+DEFVAR GF@_var-2 # Special - Alnum - Special- Alnum
+  DEFVAR TF@var_8 # Alnum - Special - Alnum
+DEFVAR TF@-$&%*ff # Special - Alnum
+DEFVAR GF@- # Special
+
+  MOVE LF@var1 string@50€
+PUSHS string@<element>&
+
+createframe
+PUSHframe

@@ -1,0 +1,55 @@
+<!DOCTYPE HTML>
+<html lang="cs">
+  <head>
+  	<meta charset="utf-8">
+  	<!--FIT modrá: 00A9E0-->
+  	<!-- Chrome, Firefox OS and Opera -->
+  	<meta name="theme-color" content="#00A9E0">
+  	<!-- Windows Phone -->
+  	<meta name="msapplication-navbutton-color" content="#00A9E0">
+  	<!-- iOS Safari -->
+  	<meta name="apple-mobile-web-app-capable" content="yes">
+  	<meta name="apple-mobile-web-app-status-bar-style" content="#00A9E0">
+  	<meta name="viewport" content="width=device-width, initial-scale=1">
+  	<title>IPP - Test results</title>
+  	<!--ŠTÝLY-->
+  	<link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <header>
+      <h1>IPP - Project 1</h1>
+      <h2>Test results</h2>
+      <p>To generate this report, run the test.php script.</p>
+      <span>Report generated: </span> <span>9.4.2018 15:44</span> <br>
+      <span>Path - parser:</span> <span>parse.php</span> <br>
+      <span>Path - interpret:</span> <span>tbd/interpret.py</span>  <br>
+    </header>
+    <section class="folder">
+      <header class="ok-folder">
+        <h3>Folder name</h3>
+        <span>path/to/this</span>
+        <span>100/100 passed</span>
+      </header>
+
+      <section class="test ok-test">
+        <h4>Test 1</h4>
+      </section>
+    </section>
+
+    <section class="folder">
+      <header class="failed-folder">
+        <h3>Another folder name</h3>
+        <span>path/to/folder</span>
+        <span>98/100 passed</span>
+      </header>
+
+      <section class="test failed-test">
+        <h4>Wow, such a great test</h4>
+        <span>File: </span> <span>a1.src</span> <br>
+        <span>Description:</span> <p>This test verifies capabilities of a web report.</p>
+        <h5></h5>
+      </section>
+    </section>
+  </body>
+</html>

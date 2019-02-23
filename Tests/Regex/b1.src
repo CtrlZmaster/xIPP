@@ -1,0 +1,7 @@
+.IPPcode18
+
+DEFVAR LF@var1 # Alnum
+DEFVAR GF@_var-2 # Special - Alnum - Special- Alnum
+DEFVAR TF@var_8 # Alnum - Special - Alnum
+DEFVAR TF@-$&%*ff # Special - Alnum
+DEFVAR GF@- # Special

@@ -1,0 +1,9 @@
+.IPPcode18
+
+
+
+PUSHS int@-5
+PUSHS int@10
+PUSHS int@354789
+PUSHS int@000
+PUSHS int@+030

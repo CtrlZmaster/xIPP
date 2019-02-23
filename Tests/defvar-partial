@@ -1,0 +1,28 @@
+#VAR ERR
+GF@1gf    # Variable name starts with a number
+LF@       # No name
+SF@var1   # Incorrect frame name
+GF@  var8 # Spaces
+GF@;e     # Unsupported character
+var5      # No frame nor delimiter
+@evil     # No frame
+
+# BOOL OK
+bool@
+bool@true
+
+# BOOL ERR
+bool@truefalse
+bool@truef
+bool@ true
+bool@atrue
+
+# STRING OK
+string@\032ahoj\032svete
+string@50€
+string@řetězec\032s\032lomítkem\032\092\032a\010novým\035řádkem
+
+# STRING ERR
+string@\03ahoj\032svete
+string@\
+string@hello@me
