@@ -2,8 +2,8 @@
 /*
  * Project: IPP Project 1
  * File: parse.php
- * Title: Lexical and syntax analyser of IPPcode18
- * Description: This script performs lexical and syntax analysis of IPPcode18 language.
+ * Title: Lexical and syntax analyser of IPPcode19
+ * Description: This script performs lexical and syntax analysis of IPPcode19 language.
  * Author: Michal Pospíšil (xpospi95@stud.fit.vutbr.cz)
  */
 
@@ -13,60 +13,15 @@
 ******************************************************************************************/
 // Arguments handling
 // This script accepts only --help parameter
-$shortArgs  = "h";
-$longArgs  = array("help", "stats:", "loc", "comments");
-$allArgs = array("h", "help", "stats", "loc", "comments");
+check_args(getopt($shortArgs, $longArgs));
 
-$cliArgs = getopt($shortArgs, $longArgs);
+// Creates an object for statistics
+$stats = new stats();
 
-if($cliArgs === false) {
-  // Failure while reading arguments
-  exit(10);
-}
+// Pass statistics to source_code class and begin processing the code
+$source = new source_code($stats);
 
-// Writing help
-if(((isset($cliArgs['h'])) xor (isset($cliArgs['help']))) && (count($cliArgs) == 1)) {
-  // Help argument without any value and accompanying arguments
-  echo "IPP Project 1 - parse.php v2 help\n\nThis script takes input in IPPcode18 language and turns it into (hopefully) equivalent XML representation. Extension STATP is implemented too.\nFull assignment here: https://wis.fit.vutbr.cz/FIT/st/course-files-st.php?file=%2Fcourse%2FIPP-IT%2Fprojects%2F2017-2018%2FZadani%2Fipp18spec.pdf&cid=12180\n\nCOMPATIBILITY:\nThis script was intended to run on PHP 5.6.3.\n\nUSAGE:\nphp parse.php [ OPTIONS ] < input.src\nScript expects input on the standard command line input.\n\nOPTIONS:\n--stats=filename  This parameter enables statistics. Statistics will be printed after the script finishes into the specified file (must be used with --loc, --comments or both)\n--loc             This outputs number of lines with code into the statistic (can't be used w/o --stats)\n--comments        Prints number of comments into the statistic (can't be used w/o --stats)\n";
-  exit(0);
-}
-else {
-  if((isset($cliArgs['h']) || isset($cliArgs['help'])) && count($cliArgs) > 1) {
-    exit(10);
-  }
-}
 
-// Invalid argument options
-// LINE 1: stats is not set, but loc and comments is set
-// LINE 2: stats is set, but comments or loc is not set
-if(((isset($cliArgs['loc']) || isset($cliArgs['comments'])) && (!isset($cliArgs['stats']))) ||
-     (isset($cliArgs['stats']) && (!isset($cliArgs['comments']) || !isset($cliArgs['loc'])))) {
-  // Arguments "loc" or "comments" on input and "stats" is missing or no file path was given
-  fwrite(STDERR, "File path for statistics is undefined or argument \"--stats\" is missing entirely. Use \"-h\" or \"--help\" for more info.\n");
-  exit(10);
-}
-
-// Throw error on unknown options
-/*foreach ($cliArgs as $key => $value) {
-  $argFound = 0;
-  for($i = 0; $i < count($allArgs); $i++) {
-    if($key == $allArgs[$i]) {
-      $argFound++;
-    }
-    if($argFound == 0) {
-      fwrite(STDERR,"Unknown argument(s).\n");
-      exit(10);
-    }
-  }
-}*/
-
-// Find which stat is first in argument list
-foreach ($cliArgs as $key => $value) {
-  if($key == "loc" || $key == "comments") {
-    $firstStat = $key;
-    break;
-  }
-}
 
 // Create new object for stats
 $stats = new stats();
@@ -74,8 +29,7 @@ if(isset($cliArgs['stats'])) {
   $stats->changePath($cliArgs['stats']);
 }
 
-// Checking IPP header
-$line = new codeLine();
+
 
 // Iterate through lines, delete comments, if non-empty line is found, compares it to the header
 for($i = 1; $line->text = fgets(STDIN); $i++) {
@@ -124,63 +78,6 @@ xmlwriter_start_attribute($xmlTemp, 'language');
 xmlwriter_text($xmlTemp, 'IPPcode18');
 xmlwriter_end_attribute($xmlTemp);
 
-// Reading from stdin - increment i, when the header was found, first for loop ended with break, thus not incrementing i
-for($i = $i+1, $instNum = 0; ($line->text = fgets(STDIN)) !== false; $i++) {
-  //fwrite(STDERR, "Iteration $i, line: $line->text\n"); //DIAG
-  $line->number = $i;
-
-  //Detecting empty lines and skipping them (empty line == only '\n' character)
-  if(substr($line->text, 0, 1) == "\n") {
-    //fwrite(STDERR, "Skipped empty line nr.$i\n"); //DIAG
-    continue;
-  }
-  // Stripping new line characters returned by fgets
-  $line->stripNewLine();
-
-  $line->deleteComment($stats); // Deletes comments and counts code and comment lines
-  if($line->text == "") {
-    // If the line contained only a comment, it's empty now
-    //fwrite(STDERR, "Skipped line $i\n"); //DIAG
-    continue;
-  }
-  $token = $line->toToken();
-  $token->checkArgs();
-
-  // Increase instruction number - syntax is checked
-  $instNum++;
-
-  xmlwriter_start_element($xmlTemp, 'instruction');     // BEGIN ELEM Instruction
-
-  xmlwriter_start_attribute($xmlTemp, 'order');         // BEGIN ATTR Order
-  xmlwriter_text($xmlTemp, $instNum);
-  xmlwriter_end_attribute($xmlTemp);                    // END ATTR Order
-
-  xmlwriter_start_attribute($xmlTemp, 'opcode');         // BEGIN ATTR Opcode
-  xmlwriter_text($xmlTemp, strtoupper($token->instWord));
-  xmlwriter_end_attribute($xmlTemp);                    // END ATTR Opcode
-
-  for($j = 0; $j < 3; $j++) {
-    if(($type = $token->types[$j]) == "none") {
-      // Break if argument doesn't exist
-      break;
-    }
-    $argNum = $j + 1;
-    xmlwriter_start_element($xmlTemp, "arg$argNum");           // BEGIN ELEM Arg
-    xmlwriter_start_attribute($xmlTemp, 'type');          // BEGIN ATTR Type
-
-    xmlwriter_text($xmlTemp, $type);
-    xmlwriter_end_attribute($xmlTemp);                    // END ATTR Type
-    xmlwriter_text($xmlTemp, $token->args[$j]);
-    xmlwriter_end_element($xmlTemp);                      // END ELEM Arg
-  }
-
-  xmlwriter_end_element($xmlTemp);                      // END ELEM Instruction
-}
-
-xmlwriter_end_element($xmlTemp); // END ELEM Program
-xmlwriter_end_document($xmlTemp);
-// Flush and write XML to stdout
-echo xmlwriter_output_memory ($xmlTemp);
 
 // Write $stats
 if(isset($cliArgs['stats'])) {
@@ -190,6 +87,585 @@ if(isset($cliArgs['stats'])) {
 // Successful termination
 exit(0);
 //END OF MAIN BODY
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*******************************************************************************************
+ * 2019 IMPLEMENTATION
+ * New classes only.
+ ******************************************************************************************/
+class source_code {
+  private $stats;
+  private $cur_line;
+  private $code_line;
+  private $cur_line_num;
+
+  public function __construct($stats) {
+    $this->stats = $stats;
+  }
+
+  // Function processes the source code from stdin
+  public function process() {
+    $header_found = false;
+    // Reading from stdin
+    for($i = 1; ($this->cur_line = fgets(STDIN)) !== false; $i++) {
+      //fwrite(STDERR, "Iteration $i, line: $line->text\n"); //DIAG
+      $this->cur_line_num = $i;
+
+      // Clean the line and update in class
+      $this->code_line = clean_line($this->cur_line);
+
+      if($this->code_line === false) {
+        // No instruction found on this line, skip it
+        continue;
+      }
+
+      // If header wasn't found yet and current line contains ".IPPcode19", header
+      // is marked as found, the script is terminated otherwise
+      if(!$header_found) {
+        if(check_header()) {
+          $header_found = true;
+          continue;
+        }
+        else {
+          // Throw error: non-comformant header
+          $phpLine = __LINE__ + 1;
+          fwrite(STDERR,"Line $this->cur_line_num: Header doesn't contain \".IPPcode19\". Thrown at parse.php:$phpLine.\n");
+          exit(21);
+        }
+      }
+
+      $instructions = new SplDoublyLinkedList;
+      $this->divide($instructions);
+      // ---------------------------------------REVISED UNTIL HERE
+      xmlwriter_start_element($xmlTemp, 'instruction');     // BEGIN ELEM Instruction
+
+      xmlwriter_start_attribute($xmlTemp, 'order');         // BEGIN ATTR Order
+      xmlwriter_text($xmlTemp, $instNum);
+      xmlwriter_end_attribute($xmlTemp);                    // END ATTR Order
+
+      xmlwriter_start_attribute($xmlTemp, 'opcode');         // BEGIN ATTR Opcode
+      xmlwriter_text($xmlTemp, strtoupper($token->instWord));
+      xmlwriter_end_attribute($xmlTemp);                    // END ATTR Opcode
+
+      for($j = 0; $j < 3; $j++) {
+        if(($type = $token->types[$j]) == "none") {
+          // Break if argument doesn't exist
+          break;
+        }
+        $argNum = $j + 1;
+        xmlwriter_start_element($xmlTemp, "arg$argNum");           // BEGIN ELEM Arg
+        xmlwriter_start_attribute($xmlTemp, 'type');          // BEGIN ATTR Type
+
+        xmlwriter_text($xmlTemp, $type);
+        xmlwriter_end_attribute($xmlTemp);                    // END ATTR Type
+        xmlwriter_text($xmlTemp, $token->args[$j]);
+        xmlwriter_end_element($xmlTemp);                      // END ELEM Arg
+      }
+
+      xmlwriter_end_element($xmlTemp);                      // END ELEM Instruction
+    }
+
+    xmlwriter_end_element($xmlTemp); // END ELEM Program
+    xmlwriter_end_document($xmlTemp);
+    // Flush and write XML to stdout
+    echo xmlwriter_output_memory ($xmlTemp);
+
+  }
+
+  // Returns a line cleaned from comments and newline character,
+  // false when the line contained only comment or whitespace chars
+  private function clean_line() {
+    // Find comments first
+    preg_split("/#/u", $this->line, $exploded);
+
+    if(count($exploded) == 1) {
+      // No '#' sign was present
+      if($exploded[0] == "") {
+        // Empty line
+        return false;
+      }
+      else {
+        // This might be an instruction
+        $this->stats->add_code();
+        // Trimming the new line character
+        $trimmed = preg_replace ('/(\n)|(\r\n)$/', "", $exploded[0]);
+        return $trimmed;
+      }
+    }
+
+    if(preg_match('/(\s)*$/', $exploded[0]) === 1) {
+      // First string matched for white spaces, next string is located after '#',
+      // so it can be safely discarded as a comment
+      $this->stats->add_comment();
+      return false;
+    }
+    else {
+      // First string might contain an istruction, next are comments
+      $this->stats->add_comment();
+      $this->stats->add_code();
+      return $exploded[0];
+    }
+  }
+
+  private function check_header() {
+    if(preg_match('/^\s*.IPPcode19\s*$/i', $this->code_line) == 1) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  private function divide($instruction_list) {
+    $lexemes = preg_split("/(\s)+/u", $this->code_line);
+    $lexeme_count = count($lexemes);
+    switch(strtolower($lexemes[0])) {
+      // Instructions without 0 operands
+      case "createframe":
+      case "pushframe":
+      case "popframe":
+      case "return":
+      case "break":
+        $instruction = new instruction_0_op($this);
+        if($lexeme_count != 1) {
+          //TODO: Throw error
+          exit(23);
+        }
+        break;
+
+      // Instructions with 1 operand
+      case "defvar":
+      case "pops":
+        $instruction = new instruction_1_op($this);
+        $instruction->fill_types("var");
+        if($lexeme_count != 2) {
+          //TODO: Throw error
+          exit(23);
+        }
+        $instruction->fill_vals($lexemes[1]);
+        break;
+      case "call":
+      case "label":
+      case "jump":
+        $instruction = new instruction_1_op($this);
+        $instruction->fill_types("label");
+        if($lexeme_count != 2) {
+          //TODO: Throw error
+          exit(23);
+        }
+        $instruction->fill_vals($lexemes[1]);
+        break;
+      case "pushs":
+      case "write":
+      case "dprint":
+        $instruction = new instruction_1_op($this);
+        $instruction->fill_types("symb");
+        if($lexeme_count != 2) {
+          //TODO: Throw error
+          exit(23);
+        }
+        $instruction->fill_vals($lexemes[1]);
+        break;
+
+      // Instructions with 2 operands
+      case "move":
+      case "int2char":
+      case "strlen":
+      case "type":
+        $instruction = new instruction_2_op($this);
+        $instruction->fill_types("var", "symb");
+        if($lexeme_count != 3) {
+          //TODO: Throw error
+          exit(23);
+        }
+        $instruction->fill_vals($lexemes[1], $lexemes[2]);
+        break;
+      case "read":
+        $instruction = new instruction_2_op($this);
+        $instruction->fill_types("var", "type");
+        if($lexeme_count != 3) {
+          //TODO: Throw error
+          exit(23);
+        }
+        $instruction->fill_vals($lexemes[1], $lexemes[2]);
+        break;
+
+      // Instructions with 3 arguments
+      case "add":
+      case "sub":
+      case "mul":
+      case "idiv":
+      case "lt": case "gt": case "eq":
+      case "and": case "or": case "not":
+      case "stri2int":
+      case "concat":
+      case "getchar":
+      case "setchar":
+        $instruction = new instruction_3_op($this);
+        $instruction->fill_types("var", "symb", "symb");
+        if($lexeme_count != 4) {
+          //TODO: Throw error
+          exit(23);
+        }
+        $instruction->fill_vals($lexemes[1], $lexemes[2], $lexemes[3]);
+        break;
+      case "jumpifeq":
+      case "jumpifneq":
+        $instruction = new instruction_3_op($this);
+        $instruction->fill_types("label", "symb", "symb");
+        if($lexeme_count != 4) {
+          //TODO: Throw error
+          exit(23);
+        }
+        $instruction->fill_vals($lexemes[1], $lexemes[2], $lexemes[3]);
+        break;
+      default:
+        $phpLine = __LINE__ + 1;
+        fwrite(STDERR,"Line $this->cur_line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
+        exit(22);
+    }
+    if(check_vals($instruction) === true) {
+      //TODO: Throw error - wrong operand type
+      exit(22);
+    }
+    $instruction_list->push();
+  }
+
+
+}
+
+class instruction_0_op {
+  protected $line_num;       // Line number in original file
+  protected $opcode_char_num;       // Char number in original file
+  protected $opcode;
+
+  public function __construct($source_code) {
+
+  }
+}
+
+class instruction_1_op extends instruction_0_op {
+  protected $arg1_val;
+  protected $arg1_type;
+  protected $arg1_char_num;
+
+  public function fill_types($type1) {
+    $this->arg1_type = $type1;
+  }
+
+  public function fill_vals($val1) {
+    $this->arg1_val = $val1;
+  }
+}
+
+class instruction_2_op extends instruction_1_op {
+  protected $arg2_val;
+  protected $arg2_type;
+  protected $arg2_char_num;
+
+  public function fill_types($type1, $type2) {
+    instruction_1_op::fill_types($type1);
+    $this->arg2_type = $type2;
+  }
+
+  public function fill_vals($val1, $val2) {
+    instruction_1_op::fill_vals($val1);
+    $this->arg2_val = $val2;
+  }
+}
+
+class instruction_3_op extends instruction_2_op {
+  protected $arg3_val;
+  protected $arg3_type;
+  protected $arg3_char_num;
+
+  public function fill_types($type1, $type2, $type3) {
+    instruction_2_op::fill_types($type1, $type2);
+    $this->arg3_type = $type3;
+  }
+
+  public function fill_vals($val1, $val2, $val3) {
+    instruction_2_op::fill_vals($val1, $val2);
+    $this->arg3_val = $val3;
+  }
+}
+
+class op_rules {
+  // Returns true if values match types or offending value
+  public function check_vals($instruction) {
+    switch(getClass($instruction)) {
+      case "instruction_3_op":
+        if(check_val($this->arg3_val, $this->arg3_type) !== true) {
+          return $this->arg3_val;
+        }
+      case "instruction_2_op":
+        if(check_val($this->arg2_val, $this->arg2_type) !== true) {
+          return $this->arg2_val;
+        }
+      case "instruction_1_op":
+        if(check_val($this->arg2_val, $this->arg2_type) !== true) {
+          return $this->arg1_val;
+        }
+    }
+    return true;
+  }
+
+  private function check_val($value, $type) {
+    switch($type) {
+      case "label":
+        break;
+      case "var":
+        break;
+      case "symb":
+        break;
+      case "type":
+        break;
+    }
+  }
+
+  private function check_str($str) {
+
+  }
+
+  private function check_int($int) {
+
+  }
+
+  private function check_bool($bool) {
+
+  }
+
+  private function check_var($var) {
+
+  }
+
+  private function check_label($label) {
+
+  }
+
+  private function check_type($type) {
+
+  }
+}
+
+/*******************************************************************************************
+ * STATISTICS
+ * This class stores statistics for STATP extension and provides functions to write them
+ * to a file and changing them.
+ ******************************************************************************************/
+class stats {
+  private $code = 0;     // Total lines of code
+  private $comments = 0; // Total comment lines
+  private $labels = 0;
+  private $jumps = 0;
+  private $filePath = false; // Path to a file where stats should be printed
+
+  /*****************************************************************************************
+   * Function creates (or overwrites) a file at path specified in Arguments
+   * Parameter firstStat determines which statistic should be written on a first line
+   * of generated file
+   ****************************************************************************************/
+  public function write_file($firstStat) {
+    //$this->code--; // Header was counted in
+    $myfile = fopen($this->filePath, "w") or exit(12);
+    if($firstStat == "loc") {
+      fwrite($myfile, "$this->code\n");
+      fwrite($myfile, "$this->comments\n");
+    }
+    else {
+      fwrite($myfile, "$this->comments\n");
+      fwrite($myfile, "$this->code\n");
+    }
+    fclose($myfile);
+
+  }
+
+  /*****************************************************************************************
+   * Function increments number of comments in current file
+   ****************************************************************************************/
+  public function add_comment() {
+    $this->comments++;
+  }
+
+  /*****************************************************************************************
+   * Function increments number of lines with code in current file
+   ****************************************************************************************/
+  public function add_code()  {
+    $this->code++;
+  }
+
+  /*****************************************************************************************
+   * Function increments number of comments in current file
+   ****************************************************************************************/
+  public function add_jump() {
+    $this->jumps++;
+  }
+
+  /*****************************************************************************************
+   * Function increments number of comments in current file
+   ****************************************************************************************/
+  public function add_label() {
+    $this->labels++;
+  }
+
+  /*****************************************************************************************
+   * This function sets a path to the file from arguments in this object
+   ****************************************************************************************/
+  public function set_file_path($path) {
+    $this->filePath = $path;
+  }
+}
+
+function check_args($args) {
+  $shortArgs  = array("h");
+  $longArgs  = array("help", "stats:", "loc", "comments");
+  $allArgs = array("h", "help", "stats", "loc", "comments");
+
+  if($args === false) {
+    // Failure while reading arguments
+    exit(10);
+  }
+
+  // Writing help
+  if(((isset($args['h'])) xor (isset($args['help']))) && (count($args) == 1)) {
+    // Help argument without any value and accompanying arguments
+    help();
+    exit(0);
+  }
+  else {
+    if((isset($args['h']) || isset($args['help'])) && count($args) > 1) {
+      exit(10);
+    }
+  }
+
+  // Invalid argument options
+  // LINE 1: stats is not set, but loc and comments is set
+  // LINE 2: stats is set, but comments or loc is not set
+  if(((isset($cliArgs['loc']) || isset($cliArgs['comments'])) && (!isset($cliArgs['stats']))) ||
+       (isset($cliArgs['stats']) && (!isset($cliArgs['comments']) || !isset($cliArgs['loc'])))) {
+    // Arguments "loc" or "comments" on input and "stats" is missing or no file path was given
+    fwrite(STDERR, "File path for statistics is undefined or argument \"--stats\" is missing entirely. Use \"-h\" or \"--help\" for more info.\n");
+    exit(10);
+  }
+
+  // Throw error on unknown options
+  /*foreach ($cliArgs as $key => $value) {
+    $argFound = 0;
+    for($i = 0; $i < count($allArgs); $i++) {
+      if($key == $allArgs[$i]) {
+        $argFound++;
+      }
+      if($argFound == 0) {
+        fwrite(STDERR,"Unknown argument(s).\n");
+        exit(10);
+      }
+    }
+  }*/
+
+  // Find which stat is first in argument list
+  foreach ($cliArgs as $key => $value) {
+    if($key == "loc" || $key == "comments") {
+      $firstStat = $key;
+      break;
+    }
+  }
+}
+
+function help() {
+  echo "IPP Project 1 - parse.php v2 help\n\nThis script takes input in
+  IPPcode18 language and turns it into (hopefully) equivalent XML representation.
+  Extension STATP is implemented too.\n\nCOMPATIBILITY:\nThis script was
+  intended to run on PHP 7.3.\n\nUSAGE:\nphp parse.php [ OPTIONS ] < input.src\n
+  Script expects input on the standard command line input.\n\nOPTIONS:
+  \n--stats=filename  This parameter enables statistics. Statistics will be
+  printed after the script finishes into the specified file (must be used with
+  --loc, --comments or both)\n--loc             This outputs number of lines
+  with code into the statistic (can't be used w/o --stats)\n--comments
+  Prints number of comments into the statistic (can't be used w/o --stats)\n";
+}
+
+/******************************************************************************************/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -448,33 +924,7 @@ class codeLine {
    * It also calls methods from stats class to count lines with code or comments.
    ****************************************************************************************/
   public function deleteComment($stats) {
-    // NOTE: Empty lines are not passed here
-    $exploded = preg_split("/(\s)*#/u", $this->text, 2);
-    $this->text = $exploded[0];
-    if($this->text == "") {
-      // Line contains only a comment - call empty string detection after this
-      // to catch newly empty lines
-      $stats->addComment();
-      return;
-    }
-    if(isset($exploded[0]) && !isset($exploded[1])) {
-      // No '#' sign has to be present, so nothing is set in second match
-      $stats->addCodeLine();
-    }
-    else {
-      if(isset($exploded[0]) && isset($exploded[1])) {
-        // Now it can be comment+code or comment only
-        if($exploded[0] == "") {
-          // Comment only lines don't get any match in first string
-          $stats->addComment();
-        }
-        else {
-          // Code+comment lines can't have empty first match
-          $stats->addComment();
-          $stats->addCodeLine();
-        }
-      }
-    }
+
   }
 
   public function stripNewLine() {
@@ -484,55 +934,5 @@ class codeLine {
   }
 }
 
-/*******************************************************************************************
- * STATISTICS
- * This class stores statistics for STATP extension and provides functions to write them
- * to a file and changing them.
- ******************************************************************************************/
-class stats {
-  private $code = 0;     // Total lines of code
-  private $comments = 0; // Total comment lines
-  private $filePath; // Path to a file where stats should be printed
 
-  /*****************************************************************************************
-   * Function creates (or overwrites) a file at path specified in Arguments
-   * Parameter firstStat determines which statistic should be written on a first line
-   * of generated file
-   ****************************************************************************************/
-  public function writeFile($firstStat) {
-    $this->code--; // Header was counted in
-    $myfile = fopen($this->filePath, "w") or exit(12);
-    if($firstStat == "loc") {
-      fwrite($myfile, "$this->code\n");
-      fwrite($myfile, "$this->comments\n");
-    }
-    else {
-      fwrite($myfile, "$this->comments\n");
-      fwrite($myfile, "$this->code\n");
-    }
-    fclose($myfile);
-
-  }
-
-  /*****************************************************************************************
-   * Function increments number of comments in current file
-   ****************************************************************************************/
-  public function addComment() {
-    $this->comments++;
-  }
-
-  /*****************************************************************************************
-   * Function increments number of lines with code in current file
-   ****************************************************************************************/
-  public function addCodeLine()  {
-    $this->code++;
-  }
-
-  /*****************************************************************************************
-   * This function sets a path to the file forom arguments in this object
-   ****************************************************************************************/
-  public function changePath($path) {
-    $this->filePath = $path;
-  }
-}
 ?>
