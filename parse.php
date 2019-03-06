@@ -182,6 +182,8 @@ class source_code {
       fwrite(STDERR,"$this->cur_line_num:$err_char_num: Incorrect operand. Thrown at parse.php:$phpLine.\n");
       exit(23);
     }
+    // Replacing type symbol with type of constant or "var"
+    $instruction->update_symb();
     return $instruction;
   }
 
@@ -260,6 +262,24 @@ class instruction_1_op extends instruction_0_op {
   public function get_ops() {
     return array($this->arg1_val);
   }
+
+  public function get_types() {
+    return array($this->arg1_type);
+  }
+
+  // Updates symbol type to appropriate type based on value
+  public function update_symb() {
+    if($this->arg1_type = "symb") {
+      $clean = preg_split("/@/u", $this->arg1_val);
+      if(clean[0] == "int" || clean[0] == "bool" || clean[0] == "string" || clean[0] == "nil") {
+        $this->arg1_val = $clean[1]; // Part after @
+        $this->arg1_type = $clean[0]; // Part before @
+      }
+      else {
+        $this->arg1_type = "var";
+      }
+    }
+  }
 }
 
 class instruction_2_op extends instruction_1_op {
@@ -300,6 +320,25 @@ class instruction_2_op extends instruction_1_op {
 
   public function get_ops() {
     return array($this->arg1_val, $this->arg2_val);
+  }
+
+  public function get_types() {
+    return array($this->arg1_type, $this->arg2_type);
+  }
+
+  // Updates symbol type to appropriate type based on value
+  public function update_symb() {
+    instruction_1_op::update_symb();
+    if($this->arg2_type = "symb") {
+      $clean = preg_split("/@/u", $this->arg2_val);
+      if(clean[0] == "int" || clean[0] == "bool" || clean[0] == "string" || clean[0] == "nil") {
+        $this->arg2_val = $clean[1]; // Part after @
+        $this->arg2_type = $clean[0]; // Part before @
+      }
+      else {
+        $this->arg2_type = "var";
+      }
+    }
   }
 }
 
@@ -349,6 +388,25 @@ class instruction_3_op extends instruction_2_op {
   public function get_ops() {
     return array($this->arg1_val, $this->arg2_val, $this->arg3_val);
   }
+
+  public function get_types() {
+    return array($this->arg1_type, $this->arg2_type, $this->arg3_type);
+  }
+
+  // Updates symbol type to appropriate type based on value
+  public function update_symb() {
+    instruction_2_op::update_symb();
+    if($this->arg3_type = "symb") {
+      $clean = preg_split("/@/u", $this->arg3_val);
+      if(clean[0] == "int" || clean[0] == "bool" || clean[0] == "string" || clean[0] == "nil") {
+        $this->arg3_val = $clean[1]; // Part after @
+        $this->arg3_type = $clean[0]; // Part before @
+      }
+      else {
+        $this->arg3_type = "var";
+      }
+    }
+  }
 }
 
 class op_rules {
@@ -393,14 +451,10 @@ class op_rules {
     // Can represent variable or constant
     // Checking format of an immediate value - string, int, bool
     //fwrite(STDERR, $this->args[$i]); //DIAG
-    if( preg_match("/^string@(?:[^\s\\#]|(\\[0-9]{3}))*$/u", $this->args[$i], $matched) == 1 ||
-        preg_match("/^int@[+-]?[0-9]+$/u", $this->args[$i]) == 1 ||
-        preg_match("/^bool@(true|false)$/u", $this->args[$i]) == 1) {
-      // Number two limits outputted strings to two, in front and behind the '@'
-      //TODO: Move somewhere else
-      $clean = preg_split("/@/u", $this->args[$i], 2);
-      $this->args[$i] = $clean[1]; // Part after @
-      $this->types[$i] = $clean[0]; // Part before @
+    if( preg_match("/^string@(?:[^\s\\#]|(\\[0-9]{3}))*$/u", $symb) == 1 ||
+        preg_match("/^int@[+-]?[0-9]+$/u", $symb) == 1 ||
+        preg_match("/^bool@(true|false)$/u", $symb) == 1 ||
+        preg_match("/^nil@nil$/u", $symb)) {
       //fwrite(STDERR, "checkArgsIF---"); //DIAG
       //fwrite(STDERR, var_dump($this->args)); //DIAG
       //fwrite(STDERR, var_dump($this->types)); //DIAG
@@ -411,7 +465,7 @@ class op_rules {
   }
 
   private function check_var($var) {
-    if(preg_match("/^(GF|TF|LF)@([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $this->args[$i], $matched) == 0) {
+    if(preg_match("/^(GF|TF|LF)@([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $var) == 0) {
       return $var;
     }
     return true;
@@ -425,7 +479,7 @@ class op_rules {
   }
 
   private function check_type($type) {
-    if($type == "string" || $type == "int" || $type == "bool") {
+    if($type == "string" || $type == "int" || $type == "bool" || $type == "nil") {
       return true;
     }
     return $type;
@@ -468,42 +522,43 @@ class xml_out {
 
     switch(getClass($instruction)) {
       case "instruction_3_op":
-        $arg_num = 3;
+        $op_count = 3;
         break;
       case "instruction_2_op":
-        $arg_num = 2;
+        $op_count = 2;
         break;
       case "instruction_1_op":
-        $arg_num = 1;
+        $op_count = 1;
         break;
       case "instruction_0_op":
-        $arg_num = 0;
+        $op_count = 0;
         break;
     }
 
-    $args = $instruction->get_ops();
+    $ops = $instruction->get_ops();
+    $types = $instruction->get_types();
 
-    for($i = 1; $i <= $arg_num; $i++) {
-      xmlwriter_start_element($xmlTemp, "arg$i");                // BEGIN ELEM Arg
-      xmlwriter_start_attribute($xmlTemp, 'type');                 // BEGIN ATTR Type
+    for($i = 1; $i <= $op_count; $i++) {
+      xmlwriter_start_element($this->buffer, "arg$i");                // BEGIN ELEM Arg
+      xmlwriter_start_attribute($this->buffer, 'type');                 // BEGIN ATTR Type
 
-      xmlwriter_text($xmlTemp, );
-      xmlwriter_end_attribute($xmlTemp);                           // END ATTR Type
-      xmlwriter_text($xmlTemp, $token->args[$i-1]);
-      xmlwriter_end_element($xmlTemp);                           // END ELEM Arg
+      xmlwriter_text($this->buffer, $types[$i-1]);
+      xmlwriter_end_attribute($this->buffer);                           // END ATTR Type
+      xmlwriter_text($this->buffer, $token->ops[$i-1]);
+      xmlwriter_end_element($this->buffer);                           // END ELEM Arg
     }
 
-    xmlwriter_end_element($xmlTemp);                           // END ELEM Instruction
+    xmlwriter_end_element($this->buffer);                           // END ELEM Instruction
   }
 
   public function end_program() {
-    xmlwriter_end_element($xmlTemp); // END ELEM Program
-    xmlwriter_end_document($xmlTemp);
+    xmlwriter_end_element($this->buffer); // END ELEM Program
+    xmlwriter_end_document($this->buffer);
   }
 
   public function write() {
     // Flush buffer and write XML to stdout
-    echo xmlwriter_output_memory ($xmlTemp);
+    echo xmlwriter_output_memory ($this->buffer);
   }
 }
 
@@ -623,7 +678,7 @@ function check_args() {
     exit(10);
   }
   // Stats is set, but some of the other options are not set
-  if(isset($cliArgs['stats']) && !(isset($cliArgs['comments']) || isset($cliArgs['loc']) ||
+  if(isset($args['stats']) && !(isset($args['comments']) || isset($args['loc']) ||
     isset($args['labels']) || isset($args['jumps']))) {
     fwrite(STDERR, "No statistic set for option \"--stats\". Use \"-h\" or \"--help\" for more info.\n");
     exit(10);
@@ -654,115 +709,4 @@ function help() {
   (can't be used w/o --stats)\n";
 
 }
-
-/******************************************************************************************/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*******************************************************************************************
- * TOKENS
- * This class implements the token and its functions.
- ******************************************************************************************/
-class token {
-  public $instWord; // ORDER 0 - contains operation code
-  public $args = array(); // Array of argument values
-  public $types = array("none", "none", "none"); // Array of argument types (var, symb, label) and later (bool, string, int)
-  public $lineNum;  // ORDER 4 - line number in original file
-
-
-  /*****************************************************************************************
-   * Checks syntax of all arguments by scanning token properties "types" and "args" where types contain allowed argument types
-   * and args contain values read from input.
-   ****************************************************************************************/
-  public function checkArgs() {
-    //fwrite(STDERR, "checkArgs-----"); //DIAG
-    //fwrite(STDERR, var_dump($this->args)); //DIAG
-    //fwrite(STDERR, var_dump($this->types)); //DIAG
-    for($i = 0; $i < 3; $i++) {
-      switch($this->types[$i]) {
-        case "symb":
-          // Variable or immediate value - no break - NOT calling exit in this case
-
-            break;
-
-        case "var":
-          if(preg_match("/^(GF|TF|LF)@([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $this->args[$i], $matched) == 0 ||
-             $this->args[$i] != $matched[0]) {
-            //fwrite(STDERR, $this->args[$i]); //DIAG
-            //fwrite(STDERR, var_dump($matched)); //DIAG
-            if($this->types[$i] == "var") {
-              // Came from var - incorrect syntax
-              $phpLine = __LINE__ + 1;
-              fwrite(STDERR,"Line $this->lineNum: This is not a valid variable. Thrown at parse.php:$phpLine.\n");
-              exit(21);
-            }
-            else {
-              // Came from immediate value checking (if in "symb" case evaluated as false)
-              $phpLine = __LINE__ + 1;
-              fwrite(STDERR,"Line $this->lineNum: This is not a valid immediate value. Thrown at parse.php:$phpLine.\n");
-              exit(21);
-            }
-          }
-          else {
-            // Variable has correct syntax, breaking before the error for incorrect symbols.
-            if($this->types[$i] == "symb") {
-              // If it was first examined as a symbol, type has to change to var for XML output
-              $this->types[$i] = "var";
-            }
-            break;
-          }
-
-        case "label":
-
-          break;
-
-        case "none":
-          break 2;
-        default:
-          fwrite(STDERR,"Invalid call of checkArgs - something tried to check an unknown data type.\n");
-          break;
-      }
-    }
-  }
-}
-
 ?>
