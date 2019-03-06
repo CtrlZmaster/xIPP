@@ -8,8 +8,8 @@
  */
 
 /*******************************************************************************************
-* MAIN BODY
-* Program starts here.
+* MAIN
+* This is executed first.
 ******************************************************************************************/
 // Argument handling
 $arg_array = check_args();
@@ -21,20 +21,19 @@ $source->process();
 
 // Successful termination
 exit(0);
-//END OF MAIN BODY
 
-
-
-
-
-
-
-
+/******************************************************************************************/
 
 
 /*******************************************************************************************
  * 2019 IMPLEMENTATION
- * New classes only.
+ * I based my script on the script from last year with significant change to the object
+ * model and some portions were rewritten entirely.
+ ******************************************************************************************/
+
+/*******************************************************************************************
+ * SOURCE CODE
+ * This class handles loading IPPcode19 from STDIN and acts as a main class.
  ******************************************************************************************/
 class source_code {
   private $stats;
@@ -62,7 +61,7 @@ class source_code {
       $this->cur_line_num = $i;
 
       // Clean the line and update in class
-      $this->code_line = clean_line($this->cur_line);
+      $this->code_line = $this->clean_line();
 
       if($this->code_line === false) {
         // No instruction found on this line, skip it
@@ -72,7 +71,7 @@ class source_code {
       // If header wasn't found yet and current line contains ".IPPcode19", header
       // is marked as found, the script is terminated otherwise
       if(!$header_found) {
-        if(check_header()) {
+        if($this->check_header()) {
           $header_found = true;
           continue;
         }
@@ -93,8 +92,8 @@ class source_code {
 
     // Iterating through list of instructions
     for($instruction_list->rewind(); $instruction_list->valid(); $instruction_list->next()) {
-      //TODO: Check that key returns value specified in assignment
-      $xml->new_instruction($instruction_list->key(), $instruction_list->current());
+      // list->key() starts at 0
+      $xml->new_instruction($instruction_list->key() + 1, $instruction_list->current());
       // Every instruction must be written on a single line, so number of code lines
       // is the same as number of instructions
       $this->stats->add_code();
@@ -102,6 +101,7 @@ class source_code {
       switch(strtolower($instruction_list->current()->get_opcode())) {
         case "label":
           $this->stats->add_label();
+          break;
         case "jump": case "jumpifeq": case "jumpifneq":
           $this->stats->add_jump();
       }
@@ -109,17 +109,20 @@ class source_code {
 
     $xml->end_program();
     $xml->write();
+
+    // Nothing is written when file is undefined
+    $this->stats->write_file($this->arg_array);
   }
 
   // Returns a line cleaned from comments and newline character,
   // false when the line contained only comment or whitespace chars
   private function clean_line() {
     // Find comments first
-    preg_split("/#/u", $this->line, $exploded);
+    $exploded = preg_split("/#/u", $this->cur_line);
 
     if(count($exploded) == 1) {
       // No '#' sign was present
-      if($exploded[0] == "") {
+      if($exploded[0] == "\n" || $exploded[0] == "\r\n") {
         // Empty line
         return false;
       }
@@ -130,14 +133,14 @@ class source_code {
       }
     }
 
-    if(preg_match('/(\s)*$/', $exploded[0]) === 1) {
+    if(preg_match('/^(\s)*$/', $exploded[0]) === 1) {
       // First string matched for white spaces, next string is located after '#',
       // so it can be safely discarded as a comment
       $this->stats->add_comment();
       return false;
     }
     else {
-      // First string might contain an istruction, next are comments
+      // First string might contain an instruction, next are comments
       $this->stats->add_comment();
       return $exploded[0];
     }
@@ -154,36 +157,51 @@ class source_code {
 
   private function divide() {
     $lexemes = preg_split("/(\s)+/u", $this->code_line);
+
+    // If instruction is followed only by whitespaces, this produces
+    // one empty string at the end
+    if($lexemes[count($lexemes) - 1] == "") {
+      array_pop($lexemes);
+    }
+
+    // If instruction is preceded only by whitespaces, this produces
+    // one empty string at the beginning
+    if($lexemes[0] == "") {
+      array_shift($lexemes);
+    }
+
     switch(count($lexemes)) {
       case 1:
-        $instruction = new instruction_0_op($lexemes);
+        $instruction = new instruction_0_op($this->cur_line_num, $lexemes);
         break;
       case 2:
-        $instruction = new instruction_1_op($lexemes);
+        $instruction = new instruction_1_op($this->cur_line_num, $lexemes);
         break;
       case 3:
-        $instruction = new instruction_2_op($lexemes);
+        $instruction = new instruction_2_op($this->cur_line_num, $lexemes);
         break;
       case 4:
-        $instruction = new instruction_3_op($lexemes);
+        $instruction = new instruction_3_op($this->cur_line_num, $lexemes);
         break;
       default:
-      //TODO: Throw error - too much lexemes to be a valid instruction
+      // Throw error - too much lexemes to be a valid instruction
       $phpLine = __LINE__ + 1;
       fwrite(STDERR,"Line $this->cur_line_num: Too many operands and/or unrecognized instruction. Thrown at parse.php:$phpLine.\n");
       exit(23);
     }
     if(($offending_value = op_rules::check_vals($instruction)) !== true) {
       // Find char_num where operand starts
-      $err_char_num = mb_strpos($this->cur_line, $offending_value);
+      $err_char_num = mb_strpos($this->cur_line, $offending_value) + 1;
 
-      //TODO: Throw error - wrong operand type
+      // Throw error - wrong operand type
       $phpLine = __LINE__ + 1;
-      fwrite(STDERR,"$this->cur_line_num:$err_char_num: Incorrect operand. Thrown at parse.php:$phpLine.\n");
+      fwrite(STDERR,"$this->cur_line_num:$err_char_num: Syntax error in operand. Thrown at parse.php:$phpLine.\n");
       exit(23);
     }
+    // var_dump($instruction); //DIAG
     // Replacing type symbol with type of constant or "var"
     $instruction->update_symb();
+    // var_dump($instruction); //DIAG
     return $instruction;
   }
 
@@ -197,7 +215,7 @@ class instruction_0_op {
 
   public function __construct($line_num, $lexemes) {
     $this->line_num = $line_num;
-    switch($lexemes[0]) {
+    switch(strtolower($lexemes[0])) {
       // Instructions without 0 operands
       case "createframe":
       case "pushframe":
@@ -216,6 +234,18 @@ class instruction_0_op {
   public function get_opcode() {
     return $this->opcode;
   }
+
+  public function get_ops() {
+    return false;
+  }
+
+  public function get_types() {
+    return false;
+  }
+
+  public function update_symb() {
+    return false;
+  }
 }
 
 class instruction_1_op extends instruction_0_op {
@@ -225,37 +255,38 @@ class instruction_1_op extends instruction_0_op {
   // Returns new instruction, except when the instruction word is not recognized
   // or number of lexemes doesn't correspond, false is returned
   public function __construct($line_num, $lexemes) {
+    //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
-    switch($lexemes[0]) {
+    switch(strtolower($lexemes[0])) {
       // Instructions with 1 operand
       case "defvar":
       case "pops":
-        fill_types("var");
+        $this->fill_types("var");
         break;
       case "call":
       case "label":
       case "jump":
-        fill_types("label");
+        $this->fill_types("label");
         break;
       case "pushs":
       case "write":
       case "dprint":
-        fill_types("symb");
+        $this->fill_types("symb");
         break;
       default:
         $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $this->cur_line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
+        fwrite(STDERR,"Line $this->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
         exit(22);
     }
     $this->opcode = $lexemes[0];
-    fill_vals($lexemes[1]);
+    $this->fill_vals($lexemes[1]);
   }
 
-  private function fill_types($type1) {
+  protected function fill_types($type1) {
     $this->arg1_type = $type1;
   }
 
-  private function fill_vals($val1) {
+  protected function fill_vals($val1) {
     $this->arg1_val = $val1;
   }
 
@@ -269,9 +300,9 @@ class instruction_1_op extends instruction_0_op {
 
   // Updates symbol type to appropriate type based on value
   public function update_symb() {
-    if($this->arg1_type = "symb") {
+    if($this->arg1_type == "symb") {
       $clean = preg_split("/@/u", $this->arg1_val);
-      if(clean[0] == "int" || clean[0] == "bool" || clean[0] == "string" || clean[0] == "nil") {
+      if($clean[0] == "int" || $clean[0] == "bool" || $clean[0] == "string" || $clean[0] == "nil") {
         $this->arg1_val = $clean[1]; // Part after @
         $this->arg1_type = $clean[0]; // Part before @
       }
@@ -287,33 +318,34 @@ class instruction_2_op extends instruction_1_op {
   protected $arg2_type;
 
   public function __construct($line_num, $lexemes) {
+    //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
-    switch($lexemes[0]) {
+    switch(strtolower($lexemes[0])) {
       // Instructions with 2 operands
       case "move":
       case "int2char":
       case "strlen":
       case "type":
-        fill_types("var", "symb");
+        $this->fill_types("var", "symb");
         break;
       case "read":
-        fill_types("var", "type");
+        $this->fill_types("var", "type");
         break;
       default:
         $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $this->cur_line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
+        fwrite(STDERR,"Line $this->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
         exit(22);
     }
     $this->opcode = $lexemes[0];
-    fill_vals($lexemes[1], $lexemes[2]);
+    $this->fill_vals($lexemes[1], $lexemes[2]);
   }
 
-  private function fill_types($type1, $type2) {
+  protected function fill_types($type1, $type2 = null) {
     instruction_1_op::fill_types($type1);
     $this->arg2_type = $type2;
   }
 
-  private function fill_vals($val1, $val2) {
+  protected function fill_vals($val1, $val2 = null) {
     instruction_1_op::fill_vals($val1);
     $this->arg2_val = $val2;
   }
@@ -329,9 +361,9 @@ class instruction_2_op extends instruction_1_op {
   // Updates symbol type to appropriate type based on value
   public function update_symb() {
     instruction_1_op::update_symb();
-    if($this->arg2_type = "symb") {
+    if($this->arg2_type == "symb") {
       $clean = preg_split("/@/u", $this->arg2_val);
-      if(clean[0] == "int" || clean[0] == "bool" || clean[0] == "string" || clean[0] == "nil") {
+      if($clean[0] == "int" || $clean[0] == "bool" || $clean[0] == "string" || $clean[0] == "nil") {
         $this->arg2_val = $clean[1]; // Part after @
         $this->arg2_type = $clean[0]; // Part before @
       }
@@ -347,8 +379,9 @@ class instruction_3_op extends instruction_2_op {
   protected $arg3_type;
 
   public function __construct($line_num, $lexemes) {
+    //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
-    switch($lexemes[0]) {
+    switch(strtolower($lexemes[0])) {
       // Instructions with 3 arguments
       case "add":
       case "sub":
@@ -360,27 +393,27 @@ class instruction_3_op extends instruction_2_op {
       case "concat":
       case "getchar":
       case "setchar":
-        fill_types("var", "symb", "symb");
+        $this->fill_types("var", "symb", "symb");
         break;
       case "jumpifeq":
       case "jumpifneq":
-        fill_types("label", "symb", "symb");
+        $this->fill_types("label", "symb", "symb");
         break;
       default:
         $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $this->cur_line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
+        fwrite(STDERR,"Line $this->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
         exit(22);
     }
     $this->opcode = $lexemes[0];
-    fill_vals($lexemes[1], $lexemes[2], $lexemes[3]);
+    $this->fill_vals($lexemes[1], $lexemes[2], $lexemes[3]);
   }
 
-  private function fill_types($type1, $type2, $type3) {
+  protected function fill_types($type1, $type2 = null, $type3 = null) {
     instruction_2_op::fill_types($type1, $type2);
     $this->arg3_type = $type3;
   }
 
-  private function fill_vals($val1, $val2, $val3) {
+  protected function fill_vals($val1, $val2 = null, $val3 = null) {
     instruction_2_op::fill_vals($val1, $val2);
     $this->arg3_val = $val3;
   }
@@ -396,9 +429,9 @@ class instruction_3_op extends instruction_2_op {
   // Updates symbol type to appropriate type based on value
   public function update_symb() {
     instruction_2_op::update_symb();
-    if($this->arg3_type = "symb") {
+    if($this->arg3_type == "symb") {
       $clean = preg_split("/@/u", $this->arg3_val);
-      if(clean[0] == "int" || clean[0] == "bool" || clean[0] == "string" || clean[0] == "nil") {
+      if($clean[0] == "int" || $clean[0] == "bool" || $clean[0] == "string" || $clean[0] == "nil") {
         $this->arg3_val = $clean[1]; // Part after @
         $this->arg3_type = $clean[0]; // Part before @
       }
@@ -412,18 +445,21 @@ class instruction_3_op extends instruction_2_op {
 class op_rules {
   // Returns true if values match types or offending value
   public function check_vals($instruction) {
-    switch(getClass($instruction)) {
+    $ops = $instruction->get_ops();
+    $types = $instruction->get_types();
+
+    switch(get_class($instruction)) {
       case "instruction_3_op":
-        if(check_val($this->arg3_val, $this->arg3_type) !== true) {
-          return $this->arg3_val;
+        if(self::check_val($ops[2], $types[2]) !== true) {
+          return $ops[2];
         }
       case "instruction_2_op":
-        if(check_val($this->arg2_val, $this->arg2_type) !== true) {
-          return $this->arg2_val;
+        if(self::check_val($ops[1], $types[1]) !== true) {
+          return $ops[1];
         }
       case "instruction_1_op":
-        if(check_val($this->arg2_val, $this->arg2_type) !== true) {
-          return $this->arg1_val;
+        if(self::check_val($ops[0], $types[0]) !== true) {
+          return $ops[0];
         }
     }
     return true;
@@ -433,16 +469,16 @@ class op_rules {
   private function check_val($value, $type) {
     switch($type) {
       case "label":
-        return check_label($value);
+        return self::check_label($value);
         break;
       case "var":
-        return check_var($value);
+        return self::check_var($value);
         break;
       case "symb":
-        return check_symb($value);
+        return self::check_symb($value);
         break;
       case "type":
-        return check_type($value);
+        return self::check_type($value);
         break;
     }
   }
@@ -461,7 +497,7 @@ class op_rules {
       return true;
     }
 
-    return check_var($symb);
+    return self::check_var($symb);
   }
 
   private function check_var($var) {
@@ -490,13 +526,13 @@ class xml_out {
   private $buffer;
 
   public function __construct() {
-    $buffer = xmlwriter_open_memory();
+    $this->buffer = xmlwriter_open_memory();
   }
 
   public function init() {
     // Set indentation
-    xmlwriter_set_indent($this->buffer, 2);
-    $res = xmlwriter_set_indent_string($xmlTemp, " ");
+    xmlwriter_set_indent($this->buffer, 1);
+    $res = xmlwriter_set_indent_string($this->buffer, "  ");
     // Create XML header
     xmlwriter_start_document($this->buffer, '1.0', 'UTF-8');
   }
@@ -517,10 +553,10 @@ class xml_out {
     xmlwriter_end_attribute($this->buffer);                      // END ATTR Order
 
     xmlwriter_start_attribute($this->buffer, 'opcode');          // BEGIN ATTR Opcode
-    xmlwriter_text($this->buffer, strtoupper($this->get_opcode()));
+    xmlwriter_text($this->buffer, strtoupper($instruction->get_opcode()));
     xmlwriter_end_attribute($this->buffer);                      // END ATTR Opcode
 
-    switch(getClass($instruction)) {
+    switch(get_class($instruction)) {
       case "instruction_3_op":
         $op_count = 3;
         break;
@@ -544,7 +580,7 @@ class xml_out {
 
       xmlwriter_text($this->buffer, $types[$i-1]);
       xmlwriter_end_attribute($this->buffer);                           // END ATTR Type
-      xmlwriter_text($this->buffer, $token->ops[$i-1]);
+      xmlwriter_text($this->buffer, $ops[$i-1]);
       xmlwriter_end_element($this->buffer);                           // END ELEM Arg
     }
 
@@ -572,14 +608,16 @@ class stats {
   private $comments = 0;     // Total comment lines
   private $labels = 0;       // Number of labels
   private $jumps = 0;        // Number of all jumps
-  private $filePath = false; // Path to a file where stats should be printed
 
   /*****************************************************************************************
    * Function creates (or overwrites) a file at path specified in arguments
    * Parameter args should contain associative array returned by getopt
    ****************************************************************************************/
   public function write_file($args) {
-    $myfile = fopen($this->filePath, "w") or exit(12);
+    if(!isset($args['stats'])) {
+      return;
+    }
+    $myfile = fopen($args['stats'], "w") or exit(12);
     // Go over argument list and write statistics in that order
     foreach ($args as $key => $value) {
       switch($key) {
@@ -636,21 +674,13 @@ class stats {
   public function add_label() {
     $this->labels++;
   }
-
-  /*****************************************************************************************
-   * This function sets a path to the file from arguments in this object
-   ****************************************************************************************/
-  public function set_file_path($path) {
-    $this->filePath = $path;
-  }
 }
 
 function check_args() {
-  $shortArgs  = array("h");
-  $longArgs  = array("help", "stats:", "loc", "comments", "labels", "jumps");
-  $allArgs = array("h", "help", "stats", "loc", "comments", "labels", "jumps");
+  $short_args  = "h";
+  $long_args  = array("help", "stats:", "loc", "comments", "labels", "jumps");
 
-  $args = getopt($shortArgs, $longArgs);
+  $args = getopt($short_args, $long_args);
 
   if($args === false) {
     // Failure while reading arguments (undefinded options included)
@@ -689,24 +719,24 @@ function check_args() {
 
 function help() {
   echo "IPP Project 1 - parse.php v3 help\n\n";
-  echo "This script takes input in IPPcode19 language and turns it into
-  (hopefully) equivalent XML representation. Extension STATP is implemented too.
-  \n\n";
+  echo "This script takes input in IPPcode19 language and turns it into " .
+  "(hopefully) equivalent XML representation. Extension STATP is implemented too. " .
+  "\n\n";
   echo "COMPATIBILITY:\nThis script was intended to run on PHP 7.3.\n\n";
   echo "USAGE:\nphp parse.php [ OPTIONS ] < input.src\n";
   echo "Script expects input on the standard command line input.\n\n";
   echo "OPTIONS:\n";
-  echo "--stats=filename  This parameter enables statistics. Statistics will be
-  printed after the script finishes into the specified file (must be used with
-  one or more of: --loc, --comments, --labels, --jumps)\n";
-  echo "--loc             This outputs number of lines with code into the statistic
-  (can't be used w/o --stats)\n";
-  echo "--comments        Prints number of comments into the statistic (can't
-  be used w/o --stats)\n";
-  echo "--jumps           Prints number of jump instructions into the statistic
-  (can't be used w/o --stats)\n";
-  echo "--labels          Prints number of defined labels into the statistic
-  (can't be used w/o --stats)\n";
+  echo "--stats=filename  This parameter enables statistics. Statistics will be " .
+  "printed after the script finishes into the specified file (must be used with " .
+  "one or more of: --loc, --comments, --labels, --jumps)\n";
+  echo "--loc             This outputs number of lines with code into the statistic " .
+  "(can't be used w/o --stats)\n";
+  echo "--comments        Prints number of comments into the statistic (can't " .
+  "be used w/o --stats)\n";
+  echo "--jumps           Prints number of jump instructions into the statistic " .
+  "(can't be used w/o --stats)\n";
+  echo "--labels          Prints number of defined labels into the statistic " .
+  "(can't be used w/o --stats)\n";
 
 }
 ?>

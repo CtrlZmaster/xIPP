@@ -1,6 +1,6 @@
-.ippCode18 #Case insensitive
+.ippCode19 #Case insensitive
 
-PUSHS     int@
+#PUSHS     int@
 PUSHS int@-5
 PUSHS  int@10
 PUSHS int@354789
