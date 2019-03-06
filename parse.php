@@ -208,11 +208,22 @@ class source_code {
 
 }
 
+/*******************************************************************************************
+ * INSTRUCTION (with) 0 OPERANDS
+ * Base class for instructions with more operands
+ * Holds an instruction when syntax analysis is done.
+ ******************************************************************************************/
 class instruction_0_op {
-  protected $line_num;       // Line number in original file
-  protected $opcode_char_num;       // Char number in original file
-  protected $opcode;
+  protected $line_num;              // Line number in original file
+  protected $opcode_char_num;       // Char number in original file - UNUSED
+  protected $opcode;                // Opeartion code (instruction word)
 
+  /*****************************************************************************************
+   * Constructor fills in opcode and original line number, instruction word is checked here,
+   * but preselection is made based on number of lexemes. Argument $line_num takes number
+   * of line from the original file and $lexemes is array of lexemes with size of 1. Returns
+   * new object on success, false when instruction word is incorrect.
+   ****************************************************************************************/
   public function __construct($line_num, $lexemes) {
     $this->line_num = $line_num;
     switch(strtolower($lexemes[0])) {
@@ -230,30 +241,53 @@ class instruction_0_op {
         exit(22);
     }
   }
-
+  /*****************************************************************************************
+   * Returns instruction word.
+   ****************************************************************************************/
   public function get_opcode() {
     return $this->opcode;
   }
 
+  /*****************************************************************************************
+   * Returns array of operands.
+   * Returns false for compatibility in this class. Overriden in child classes.
+   ****************************************************************************************/
   public function get_ops() {
     return false;
   }
 
+  /*****************************************************************************************
+   * Returns array of operand types.
+   * Returns false for compatibility in this class. Overriden in child classes.
+   ****************************************************************************************/
   public function get_types() {
     return false;
   }
 
+  /*****************************************************************************************
+   * Changes operand type symbol to a constant or a variable depending on value.
+   * Returns false for compatibility in this class. Overriden in child classes.
+   ****************************************************************************************/
   public function update_symb() {
     return false;
   }
 }
 
+/*******************************************************************************************
+ * INSTRUCTION (with) 1 OPERAND
+ * Child class of instructions with 0 operands
+ * Holds an instruction when syntax analysis is done.
+ ******************************************************************************************/
 class instruction_1_op extends instruction_0_op {
-  protected $arg1_val;
-  protected $arg1_type;
+  protected $arg1_val;     // Adds a value of argument 1
+  protected $arg1_type;    // Adds a type of argument 1
 
-  // Returns new instruction, except when the instruction word is not recognized
-  // or number of lexemes doesn't correspond, false is returned
+  /*****************************************************************************************
+   * Constructor fills in opcode and original line number, instruction word is checked here,
+   * but preselection is made based on number of lexemes. Argument $line_num takes number
+   * of line from the original file and $lexemes is array of lexemes with size of 1. Returns
+   * new object on success, false when instruction word is incorrect.
+   ****************************************************************************************/
   public function __construct($line_num, $lexemes) {
     //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
@@ -282,23 +316,44 @@ class instruction_1_op extends instruction_0_op {
     $this->fill_vals($lexemes[1]);
   }
 
+  /*****************************************************************************************
+   * Sets types of arguments. Arguments should contain strings with types defined
+   * by instructions. Types are used for syntax analysis.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   protected function fill_types($type1) {
     $this->arg1_type = $type1;
   }
 
+  /*****************************************************************************************
+   * Sets values of arguments. Arguments should contain strings with values from source
+   * code without any modification. They will be checked and modified for XML later.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   protected function fill_vals($val1) {
     $this->arg1_val = $val1;
   }
 
+  /*****************************************************************************************
+   * Returns array of operand values.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function get_ops() {
     return array($this->arg1_val);
   }
 
+  /*****************************************************************************************
+   * Returns array of operand types.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function get_types() {
     return array($this->arg1_type);
   }
 
-  // Updates symbol type to appropriate type based on value
+  /*****************************************************************************************
+   * Changes operand type symbol to a constant or a variable depending on value.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function update_symb() {
     if($this->arg1_type == "symb") {
       $clean = preg_split("/@/u", $this->arg1_val);
@@ -313,10 +368,21 @@ class instruction_1_op extends instruction_0_op {
   }
 }
 
+/*******************************************************************************************
+ * INSTRUCTION (with) 2 OPERANDS
+ * Child class of instructions with 1 operand
+ * Holds an instruction when syntax analysis is done.
+ ******************************************************************************************/
 class instruction_2_op extends instruction_1_op {
   protected $arg2_val;
   protected $arg2_type;
 
+  /*****************************************************************************************
+   * Constructor fills in opcode and original line number, instruction word is checked here,
+   * but preselection is made based on number of lexemes. Argument $line_num takes number
+   * of line from the original file and $lexemes is array of lexemes with size of 1. Returns
+   * new object on success, false when instruction word is incorrect.
+   ****************************************************************************************/
   public function __construct($line_num, $lexemes) {
     //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
@@ -340,25 +406,46 @@ class instruction_2_op extends instruction_1_op {
     $this->fill_vals($lexemes[1], $lexemes[2]);
   }
 
+  /*****************************************************************************************
+   * Sets types of arguments. Arguments should contain strings with types defined
+   * by instructions. Types are used for syntax analysis.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   protected function fill_types($type1, $type2 = null) {
     instruction_1_op::fill_types($type1);
     $this->arg2_type = $type2;
   }
 
+  /*****************************************************************************************
+   * Sets values of arguments. Arguments should contain strings with values from source
+   * code without any modification. They will be checked and modified for XML later.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   protected function fill_vals($val1, $val2 = null) {
     instruction_1_op::fill_vals($val1);
     $this->arg2_val = $val2;
   }
 
+  /*****************************************************************************************
+   * Returns array of operand values.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function get_ops() {
     return array($this->arg1_val, $this->arg2_val);
   }
 
+  /*****************************************************************************************
+   * Returns array of operand types.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function get_types() {
     return array($this->arg1_type, $this->arg2_type);
   }
 
-  // Updates symbol type to appropriate type based on value
+  /*****************************************************************************************
+   * Changes operand type symbol to a constant or a variable depending on value.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function update_symb() {
     instruction_1_op::update_symb();
     if($this->arg2_type == "symb") {
@@ -374,10 +461,21 @@ class instruction_2_op extends instruction_1_op {
   }
 }
 
+/*******************************************************************************************
+ * INSTRUCTION (with) 3 OPERANDS
+ * Child class of instructions with 2 operands
+ * Holds an instruction when syntax analysis is done.
+ ******************************************************************************************/
 class instruction_3_op extends instruction_2_op {
   protected $arg3_val;
   protected $arg3_type;
 
+  /*****************************************************************************************
+   * Constructor fills in opcode and original line number, instruction word is checked here,
+   * but preselection is made based on number of lexemes. Argument $line_num takes number
+   * of line from the original file and $lexemes is array of lexemes with size of 1. Returns
+   * new object on success, false when instruction word is incorrect.
+   ****************************************************************************************/
   public function __construct($line_num, $lexemes) {
     //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
@@ -408,25 +506,46 @@ class instruction_3_op extends instruction_2_op {
     $this->fill_vals($lexemes[1], $lexemes[2], $lexemes[3]);
   }
 
+  /*****************************************************************************************
+   * Sets types of arguments. Arguments should contain strings with types defined
+   * by instructions. Types are used for syntax analysis.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   protected function fill_types($type1, $type2 = null, $type3 = null) {
     instruction_2_op::fill_types($type1, $type2);
     $this->arg3_type = $type3;
   }
 
+  /*****************************************************************************************
+   * Sets values of arguments. Arguments should contain strings with values from source
+   * code without any modification. They will be checked and modified for XML later.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   protected function fill_vals($val1, $val2 = null, $val3 = null) {
     instruction_2_op::fill_vals($val1, $val2);
     $this->arg3_val = $val3;
   }
 
+  /*****************************************************************************************
+   * Returns array of operand values.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function get_ops() {
     return array($this->arg1_val, $this->arg2_val, $this->arg3_val);
   }
 
+  /*****************************************************************************************
+   * Returns array of operand types.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function get_types() {
     return array($this->arg1_type, $this->arg2_type, $this->arg3_type);
   }
 
-  // Updates symbol type to appropriate type based on value
+  /*****************************************************************************************
+   * Changes operand type symbol to a constant or a variable depending on value.
+   * Overriden in child classes due to different number of arguments.
+   ****************************************************************************************/
   public function update_symb() {
     instruction_2_op::update_symb();
     if($this->arg3_type == "symb") {
@@ -442,8 +561,15 @@ class instruction_3_op extends instruction_2_op {
   }
 }
 
+/*******************************************************************************************
+ * OPERAND RULES
+ * Class methods check syntax of operands in instances of instructions.
+ ******************************************************************************************/
 class op_rules {
-  // Returns true if values match types or offending value
+  /*******************************************************************************************
+   * Only public method of this class. Checks syntax of instruction's operands.
+   * Returns true if values match types or offending value
+   ******************************************************************************************/
   public function check_vals($instruction) {
     $ops = $instruction->get_ops();
     $types = $instruction->get_types();
@@ -465,7 +591,10 @@ class op_rules {
     return true;
   }
 
-  // Returns true if value matches type and value when argument is incorrect
+  /*******************************************************************************************
+   * Helper for function check_vals - checks pair $value and $type.
+   * Returns true if values match types or value of incorrect operand.
+   ******************************************************************************************/
   private function check_val($value, $type) {
     switch($type) {
       case "label":
@@ -483,6 +612,10 @@ class op_rules {
     }
   }
 
+  /*******************************************************************************************
+   * Helper for function check_val - checks symbols.
+   * Returns true if values match types or value of incorrect operand.
+   ******************************************************************************************/
   private function check_symb($symb) {
     // Can represent variable or constant
     // Checking format of an immediate value - string, int, bool
@@ -500,6 +633,10 @@ class op_rules {
     return self::check_var($symb);
   }
 
+  /*******************************************************************************************
+   * Helper for function check_val - checks variable.
+   * Returns true if values match types or value of incorrect operand.
+   ******************************************************************************************/
   private function check_var($var) {
     if(preg_match("/^(GF|TF|LF)@([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $var) == 0) {
       return $var;
@@ -507,6 +644,10 @@ class op_rules {
     return true;
   }
 
+  /*******************************************************************************************
+   * Helper for function check_val - checks label.
+   * Returns true if values match types or value of incorrect operand.
+   ******************************************************************************************/
   private function check_label($label) {
     if(preg_match("/^([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $label) == 0) {
       return $label;
@@ -514,6 +655,10 @@ class op_rules {
     return true;
   }
 
+  /*******************************************************************************************
+   * Helper for function check_val - checks data type name.
+   * Returns true if values match types or value of incorrect operand.
+   ******************************************************************************************/
   private function check_type($type) {
     if($type == "string" || $type == "int" || $type == "bool" || $type == "nil") {
       return true;
@@ -522,13 +667,23 @@ class op_rules {
   }
 }
 
+/*******************************************************************************************
+ * XML OUTPUT
+ * Handles creation of XML output.
+ ******************************************************************************************/
 class xml_out {
   private $buffer;
 
+  /*****************************************************************************************
+   * Creates an instance of XML buffer that is used by other XML instructions
+   ****************************************************************************************/
   public function __construct() {
     $this->buffer = xmlwriter_open_memory();
   }
 
+  /*****************************************************************************************
+   * Function sets initial settings for the XML file
+   ****************************************************************************************/
   public function init() {
     // Set indentation
     xmlwriter_set_indent($this->buffer, 1);
@@ -537,6 +692,9 @@ class xml_out {
     xmlwriter_start_document($this->buffer, '1.0', 'UTF-8');
   }
 
+  /*****************************************************************************************
+   * Creates a program element in XML buffer
+   ****************************************************************************************/
   public function start_program() {
     // BEGIN Program
     xmlwriter_start_element($this->buffer, 'program');
@@ -545,6 +703,11 @@ class xml_out {
     xmlwriter_end_attribute($this->buffer);
   }
 
+  /*****************************************************************************************
+   * Creates a new instruction element in buffer. Argument $instruction_num contains
+   * order of the instruction (can be obtained as a key from linked list of instr.)
+   * and $instruction should contain an instance of instruction class.
+   ****************************************************************************************/
   public function new_instruction($instruction_num, $instruction) {
     xmlwriter_start_element($this->buffer, 'instruction');     // BEGIN ELEM Instruction
 
@@ -587,11 +750,18 @@ class xml_out {
     xmlwriter_end_element($this->buffer);                           // END ELEM Instruction
   }
 
+  /*****************************************************************************************
+   * Function closes program element in XML buffer.
+   ****************************************************************************************/
   public function end_program() {
     xmlwriter_end_element($this->buffer); // END ELEM Program
     xmlwriter_end_document($this->buffer);
   }
 
+
+  /*****************************************************************************************
+   * Function prints XML from buffer to standard output.
+   ****************************************************************************************/
   public function write() {
     // Flush buffer and write XML to stdout
     echo xmlwriter_output_memory ($this->buffer);
@@ -601,7 +771,7 @@ class xml_out {
 /*******************************************************************************************
  * STATISTICS
  * This class stores statistics for STATP extension and provides functions to write them
- * to a file and changing them.
+ * to a file and modifying them.
  ******************************************************************************************/
 class stats {
   private $code = 0;         // Total lines of code
@@ -676,6 +846,8 @@ class stats {
   }
 }
 
+// Function reads arguments from command line and checks that valid options were given.
+// When invalid options are given, script ends with an appropriate error code
 function check_args() {
   $short_args  = "h";
   $long_args  = array("help", "stats:", "loc", "comments", "labels", "jumps");
@@ -717,6 +889,7 @@ function check_args() {
   return $args;
 }
 
+// Function prints help on standard output
 function help() {
   echo "IPP Project 1 - parse.php v3 help\n\n";
   echo "This script takes input in IPPcode19 language and turns it into " .
