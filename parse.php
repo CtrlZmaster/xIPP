@@ -11,27 +11,13 @@
 * MAIN BODY
 * Program starts here.
 ******************************************************************************************/
-// Arguments handling
-// This script accepts only --help parameter
+// Argument handling
 $arg_array = check_args();
 
-// Creates an object for statistics
-$stats = new stats();
-
 // Pass statistics (by reference) to source_code class and begin processing the code
-$source = new source_code($stats);
+$source = new source_code($arg_array);
 
 $source->process();
-
-// Create new object for stats
-if(isset($cliArgs['stats'])) {
-  $stats->changePath($cliArgs['stats']);
-}
-
-// Write $stats
-if(isset($cliArgs['stats'])) {
-  $stats->writeFile($firstStat);
-}
 
 // Successful termination
 exit(0);
@@ -55,15 +41,19 @@ class source_code {
   private $cur_line;
   private $code_line;
   private $cur_line_num;
+  private $arg_array;
 
-  public function __construct(&$stats) {
-    $this->stats = $stats;
+  public function __construct($arg_array) {
+    $this->stats = new stats();
+    $this->arg_array = $arg_array;
   }
 
   // Function processes the source code from stdin
   public function process() {
+    // Flag
     $header_found = false;
 
+    // Checked instructions are stored in this linked list
     $instruction_list = new SplDoublyLinkedList;
 
     // Reading from stdin
@@ -101,9 +91,14 @@ class source_code {
     $xml->init();
     $xml->start_program();
 
+    // Iterating through list of instructions
     for($instruction_list->rewind(); $instruction_list->valid(); $instruction_list->next()) {
       //TODO: Check that key returns value specified in assignment
       $xml->new_instruction($instruction_list->key(), $instruction_list->current());
+      // Every instruction must be written on a single line, so number of code lines
+      // is the same as number of instructions
+      $this->stats->add_code();
+      // Special statistics for certain instructions
       switch(strtolower($instruction_list->current()->get_opcode())) {
         case "label":
           $this->stats->add_label();
@@ -129,8 +124,6 @@ class source_code {
         return false;
       }
       else {
-        // This might be an instruction
-        $this->stats->add_code();
         // Trimming the new line character
         $trimmed = preg_replace ('/(\n)|(\r\n)$/', "", $exploded[0]);
         return $trimmed;
@@ -146,7 +139,6 @@ class source_code {
     else {
       // First string might contain an istruction, next are comments
       $this->stats->add_comment();
-      $this->stats->add_code();
       return $exploded[0];
     }
   }
@@ -201,7 +193,8 @@ class instruction_0_op {
   protected $opcode_char_num;       // Char number in original file
   protected $opcode;
 
-  public function __construct($lexemes) {
+  public function __construct($line_num, $lexemes) {
+    $this->line_num = $line_num;
     switch($lexemes[0]) {
       // Instructions without 0 operands
       case "createframe":
@@ -213,7 +206,7 @@ class instruction_0_op {
         break;
       default:
         $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $this->cur_line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
+        fwrite(STDERR,"Line $this->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
         exit(22);
     }
   }
@@ -229,8 +222,9 @@ class instruction_1_op extends instruction_0_op {
 
   // Returns new instruction, except when the instruction word is not recognized
   // or number of lexemes doesn't correspond, false is returned
-  public function __construct($opcode) {
-    switch($opcode) {
+  public function __construct($line_num, $lexemes) {
+    $this->line_num = $line_num;
+    switch($lexemes[0]) {
       // Instructions with 1 operand
       case "defvar":
       case "pops":
@@ -272,8 +266,9 @@ class instruction_2_op extends instruction_1_op {
   protected $arg2_val;
   protected $arg2_type;
 
-  public function __construct($opcode) {
-    switch($opcode) {
+  public function __construct($line_num, $lexemes) {
+    $this->line_num = $line_num;
+    switch($lexemes[0]) {
       // Instructions with 2 operands
       case "move":
       case "int2char":
@@ -312,8 +307,9 @@ class instruction_3_op extends instruction_2_op {
   protected $arg3_val;
   protected $arg3_type;
 
-  public function __construct($opcode) {
-    switch($opcode) {
+  public function __construct($line_num, $lexemes) {
+    $this->line_num = $line_num;
+    switch($lexemes[0]) {
       // Instructions with 3 arguments
       case "add":
       case "sub":
@@ -379,26 +375,60 @@ class op_rules {
   private function check_val($value, $type) {
     switch($type) {
       case "label":
+        return check_label($value);
         break;
       case "var":
+        return check_var($value);
         break;
       case "symb":
+        return check_symb($value);
         break;
       case "type":
+        return check_type($value);
         break;
     }
   }
 
-  private function check_var($var) {
+  private function check_symb($symb) {
+    // Can represent variable or constant
+    // Checking format of an immediate value - string, int, bool
+    //fwrite(STDERR, $this->args[$i]); //DIAG
+    if( preg_match("/^string@(?:[^\s\\#]|(\\[0-9]{3}))*$/u", $this->args[$i], $matched) == 1 ||
+        preg_match("/^int@[+-]?[0-9]+$/u", $this->args[$i]) == 1 ||
+        preg_match("/^bool@(true|false)$/u", $this->args[$i]) == 1) {
+      // Number two limits outputted strings to two, in front and behind the '@'
+      //TODO: Move somewhere else
+      $clean = preg_split("/@/u", $this->args[$i], 2);
+      $this->args[$i] = $clean[1]; // Part after @
+      $this->types[$i] = $clean[0]; // Part before @
+      //fwrite(STDERR, "checkArgsIF---"); //DIAG
+      //fwrite(STDERR, var_dump($this->args)); //DIAG
+      //fwrite(STDERR, var_dump($this->types)); //DIAG
+      return true;
+    }
 
+    return check_var($symb);
+  }
+
+  private function check_var($var) {
+    if(preg_match("/^(GF|TF|LF)@([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $this->args[$i], $matched) == 0) {
+      return $var;
+    }
+    return true;
   }
 
   private function check_label($label) {
-
+    if(preg_match("/^([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $label) == 0) {
+      return $label;
+    }
+    return true;
   }
 
   private function check_type($type) {
-
+    if($type == "string" || $type == "int" || $type == "bool") {
+      return true;
+    }
+    return $type;
   }
 }
 
@@ -453,7 +483,7 @@ class xml_out {
 
     $args = $instruction->get_ops();
 
-    for($i = 1; $i <=$arg_num; $i++) {
+    for($i = 1; $i <= $arg_num; $i++) {
       xmlwriter_start_element($xmlTemp, "arg$i");                // BEGIN ELEM Arg
       xmlwriter_start_attribute($xmlTemp, 'type');                 // BEGIN ATTR Type
 
@@ -490,23 +520,34 @@ class stats {
   private $filePath = false; // Path to a file where stats should be printed
 
   /*****************************************************************************************
-   * Function creates (or overwrites) a file at path specified in Arguments
-   * Parameter firstStat determines which statistic should be written on a first line
-   * of generated file
+   * Function creates (or overwrites) a file at path specified in arguments
+   * Parameter args should contain associative array returned by getopt
    ****************************************************************************************/
-  public function write_file($firstStat) {
-    //$this->code--; // Header was counted in
+  public function write_file($args) {
     $myfile = fopen($this->filePath, "w") or exit(12);
-    if($firstStat == "loc") {
-      fwrite($myfile, "$this->code\n");
-      fwrite($myfile, "$this->comments\n");
+    // Go over argument list and write statistics in that order
+    foreach ($args as $key => $value) {
+      switch($key) {
+        case "loc":
+          fwrite($myfile, "$this->code\n");
+          break;
+        case "comments":
+          fwrite($myfile, "$this->comments\n");
+          break;
+        case "labels":
+          fwrite($myfile, "$this->labels\n");
+          break;
+        case "jumps":
+          fwrite($myfile, "$this->jumps\n");
+          break;
+        default:
+          // DO NOTHING - other options
+          break;
+      }
     }
-    else {
-      fwrite($myfile, "$this->comments\n");
-      fwrite($myfile, "$this->code\n");
-    }
-    fclose($myfile);
 
+    // Save file to disk
+    fclose($myfile);
   }
 
   /*****************************************************************************************
@@ -549,12 +590,12 @@ class stats {
   }
 }
 
-function check_args($args) {
+function check_args() {
   $shortArgs  = array("h");
-  $longArgs  = array("help", "stats:", "loc", "comments");
-  $allArgs = array("h", "help", "stats", "loc", "comments");
+  $longArgs  = array("help", "stats:", "loc", "comments", "labels", "jumps");
+  $allArgs = array("h", "help", "stats", "loc", "comments", "labels", "jumps");
 
-  getopt($shortArgs, $longArgs);
+  $args = getopt($shortArgs, $longArgs);
 
   if($args === false) {
     // Failure while reading arguments (undefinded options included)
@@ -574,36 +615,44 @@ function check_args($args) {
   }
 
   // Invalid argument options
-  // LINE 1: stats is not set, but loc and comments is set
-  // LINE 2: stats is set, but comments or loc is not set
-  if(((isset($cliArgs['loc']) || isset($cliArgs['comments'])) && (!isset($cliArgs['stats']))) ||
-       (isset($cliArgs['stats']) && (!isset($cliArgs['comments']) || !isset($cliArgs['loc'])))) {
+  // Stats is not set, but some of the other options are set
+  if(!isset($args['stats']) && (isset($args['loc']) || isset($args['comments']) ||
+      isset($args['labels']) || isset($args['jumps']))) {
     // Arguments "loc" or "comments" on input and "stats" is missing or no file path was given
-    fwrite(STDERR, "File path for statistics is undefined or argument \"--stats\" is missing entirely. Use \"-h\" or \"--help\" for more info.\n");
+    fwrite(STDERR, "File path for statistics is undefined or option \"--stats\" is missing entirely. Use \"-h\" or \"--help\" for more info.\n");
+    exit(10);
+  }
+  // Stats is set, but some of the other options are not set
+  if(isset($cliArgs['stats']) && !(isset($cliArgs['comments']) || isset($cliArgs['loc']) ||
+    isset($args['labels']) || isset($args['jumps']))) {
+    fwrite(STDERR, "No statistic set for option \"--stats\". Use \"-h\" or \"--help\" for more info.\n");
     exit(10);
   }
 
-
-  // Find which stat is first in argument list
-  foreach ($cliArgs as $key => $value) {
-    if($key == "loc" || $key == "comments") {
-      $firstStat = $key;
-      break;
-    }
-  }
+  return $args;
 }
 
 function help() {
-  echo "IPP Project 1 - parse.php v2 help\n\nThis script takes input in
-  IPPcode18 language and turns it into (hopefully) equivalent XML representation.
-  Extension STATP is implemented too.\n\nCOMPATIBILITY:\nThis script was
-  intended to run on PHP 7.3.\n\nUSAGE:\nphp parse.php [ OPTIONS ] < input.src\n
-  Script expects input on the standard command line input.\n\nOPTIONS:
-  \n--stats=filename  This parameter enables statistics. Statistics will be
+  echo "IPP Project 1 - parse.php v3 help\n\n";
+  echo "This script takes input in IPPcode19 language and turns it into
+  (hopefully) equivalent XML representation. Extension STATP is implemented too.
+  \n\n";
+  echo "COMPATIBILITY:\nThis script was intended to run on PHP 7.3.\n\n";
+  echo "USAGE:\nphp parse.php [ OPTIONS ] < input.src\n";
+  echo "Script expects input on the standard command line input.\n\n";
+  echo "OPTIONS:\n";
+  echo "--stats=filename  This parameter enables statistics. Statistics will be
   printed after the script finishes into the specified file (must be used with
-  --loc, --comments or both)\n--loc             This outputs number of lines
-  with code into the statistic (can't be used w/o --stats)\n--comments
-  Prints number of comments into the statistic (can't be used w/o --stats)\n";
+  one or more of: --loc, --comments, --labels, --jumps)\n";
+  echo "--loc             This outputs number of lines with code into the statistic
+  (can't be used w/o --stats)\n";
+  echo "--comments        Prints number of comments into the statistic (can't
+  be used w/o --stats)\n";
+  echo "--jumps           Prints number of jump instructions into the statistic
+  (can't be used w/o --stats)\n";
+  echo "--labels          Prints number of defined labels into the statistic
+  (can't be used w/o --stats)\n";
+
 }
 
 /******************************************************************************************/
@@ -672,20 +721,9 @@ class token {
       switch($this->types[$i]) {
         case "symb":
           // Variable or immediate value - no break - NOT calling exit in this case
-          // Checking format of an immediate value - string, int, bool
-          //fwrite(STDERR, $this->args[$i]); //DIAG
-          if( preg_match("/^string@(?:[^\s\\#]|(\\[0-9]{3}))*$/u", $this->args[$i], $matched) == 1 ||
-              preg_match("/^int@[+-]?[0-9]+$/u", $this->args[$i]) == 1 ||
-              preg_match("/^bool@(true|false)$/u", $this->args[$i]) == 1) {
-            // Number two limits outputted strings to two, in front and behind the '@'
-            $clean = preg_split("/@/u", $this->args[$i], 2);
-            $this->args[$i] = $clean[1]; // Part after @
-            $this->types[$i] = $clean[0]; // Part before @
-            //fwrite(STDERR, "checkArgsIF---"); //DIAG
-            //fwrite(STDERR, var_dump($this->args)); //DIAG
-            //fwrite(STDERR, var_dump($this->types)); //DIAG
+
             break;
-          }
+
         case "var":
           if(preg_match("/^(GF|TF|LF)@([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $this->args[$i], $matched) == 0 ||
              $this->args[$i] != $matched[0]) {
@@ -714,11 +752,7 @@ class token {
           }
 
         case "label":
-          if(preg_match("/^([[:alpha:]]|[_\-$&%*])(?:[[:alnum:]]|[_\-$&%*])*$/u", $this->args[$i]) == 0) {
-            $phpLine = __LINE__ + 1;
-            fwrite(STDERR,"Line $this->lineNum: This is not a valid label. Thrown at parse.php:$phpLine.\n");
-            exit(21);
-          }
+
           break;
 
         case "none":
