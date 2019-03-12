@@ -170,26 +170,35 @@ class source_code {
       array_shift($lexemes);
     }
 
-    switch(count($lexemes)) {
-      case 1:
+    // Checking instruction word
+    $type_arr = rules::check_instruct($lexemes[0]);
+    switch(count($type_arr)) {
+      case 0:
         $instruction = new instruction_0_op($this->cur_line_num, $lexemes);
         break;
+      case 1:
+        $instruction = new instruction_1_op($this->cur_line_num, $lexemes, $type_arr);
+        break;
       case 2:
-        $instruction = new instruction_1_op($this->cur_line_num, $lexemes);
+        $instruction = new instruction_2_op($this->cur_line_num, $lexemes, $type_arr);
         break;
       case 3:
-        $instruction = new instruction_2_op($this->cur_line_num, $lexemes);
+        $instruction = new instruction_3_op($this->cur_line_num, $lexemes, $type_arr);
         break;
-      case 4:
-        $instruction = new instruction_3_op($this->cur_line_num, $lexemes);
-        break;
-      default:
+    }
+
+    // Check number of lexemes
+    if(count($type_arr) + 1 != count($lexemes)) {
+      // Find char_num where operand starts
+      $err_char_num = mb_strpos($this->cur_line, $lexemes[count($type_arr)]) + 1;
+
       // Throw error - too much lexemes to be a valid instruction
       $phpLine = __LINE__ + 1;
-      fwrite(STDERR,"Line $this->cur_line_num: Too many operands and/or unrecognized instruction. Thrown at parse.php:$phpLine.\n");
+      fwrite(STDERR,"$this->cur_line_num:$err_char_num: Too many operands. Thrown at parse.php:$phpLine.\n");
       exit(23);
     }
-    if(($offending_value = op_rules::check_vals($instruction)) !== true) {
+    // Checks operand syntax
+    if(($offending_value = rules::check_vals($instruction)) !== true) {
       // Find char_num where operand starts
       $err_char_num = mb_strpos($this->cur_line, $offending_value) + 1;
 
@@ -226,20 +235,7 @@ class instruction_0_op {
    ****************************************************************************************/
   public function __construct($line_num, $lexemes) {
     $this->line_num = $line_num;
-    switch(strtolower($lexemes[0])) {
-      // Instructions without 0 operands
-      case "createframe":
-      case "pushframe":
-      case "popframe":
-      case "return":
-      case "break":
-        $this->opcode = $lexemes[0];
-        break;
-      default:
-        $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $this->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
-        exit(22);
-    }
+    $this->opcode = $lexemes[0];
   }
   /*****************************************************************************************
    * Returns instruction word.
@@ -288,32 +284,12 @@ class instruction_1_op extends instruction_0_op {
    * of line from the original file and $lexemes is array of lexemes with size of 1. Returns
    * new object on success, false when instruction word is incorrect.
    ****************************************************************************************/
-  public function __construct($line_num, $lexemes) {
+  public function __construct($line_num, $lexemes, $type_arr) {
     //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
-    switch(strtolower($lexemes[0])) {
-      // Instructions with 1 operand
-      case "defvar":
-      case "pops":
-        $this->fill_types("var");
-        break;
-      case "call":
-      case "label":
-      case "jump":
-        $this->fill_types("label");
-        break;
-      case "pushs":
-      case "write":
-      case "dprint":
-        $this->fill_types("symb");
-        break;
-      default:
-        $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $this->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
-        exit(22);
-    }
     $this->opcode = $lexemes[0];
     $this->fill_vals($lexemes[1]);
+    $this->fill_types($type_arr[0]);
   }
 
   /*****************************************************************************************
@@ -383,27 +359,12 @@ class instruction_2_op extends instruction_1_op {
    * of line from the original file and $lexemes is array of lexemes with size of 1. Returns
    * new object on success, false when instruction word is incorrect.
    ****************************************************************************************/
-  public function __construct($line_num, $lexemes) {
+  public function __construct($line_num, $lexemes, $type_arr) {
     //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
-    switch(strtolower($lexemes[0])) {
-      // Instructions with 2 operands
-      case "move":
-      case "int2char":
-      case "strlen":
-      case "type":
-        $this->fill_types("var", "symb");
-        break;
-      case "read":
-        $this->fill_types("var", "type");
-        break;
-      default:
-        $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $this->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
-        exit(22);
-    }
     $this->opcode = $lexemes[0];
     $this->fill_vals($lexemes[1], $lexemes[2]);
+    $this->fill_types($type_arr[0], $type_arr[1]);
   }
 
   /*****************************************************************************************
@@ -476,34 +437,11 @@ class instruction_3_op extends instruction_2_op {
    * of line from the original file and $lexemes is array of lexemes with size of 1. Returns
    * new object on success, false when instruction word is incorrect.
    ****************************************************************************************/
-  public function __construct($line_num, $lexemes) {
+  public function __construct($line_num, $lexemes, $type_arr) {
     //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
-    switch(strtolower($lexemes[0])) {
-      // Instructions with 3 arguments
-      case "add":
-      case "sub":
-      case "mul":
-      case "idiv":
-      case "lt": case "gt": case "eq":
-      case "and": case "or": case "not":
-      case "stri2int":
-      case "concat":
-      case "getchar":
-      case "setchar":
-        $this->fill_types("var", "symb", "symb");
-        break;
-      case "jumpifeq":
-      case "jumpifneq":
-        $this->fill_types("label", "symb", "symb");
-        break;
-      default:
-        $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $this->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
-        exit(22);
-    }
-    $this->opcode = $lexemes[0];
     $this->fill_vals($lexemes[1], $lexemes[2], $lexemes[3]);
+    $this->fill_types($type_arr[0], $type_arr[1], $type_arr[2]);
   }
 
   /*****************************************************************************************
@@ -561,14 +499,80 @@ class instruction_3_op extends instruction_2_op {
   }
 }
 
-/*******************************************************************************************
+/*********************************************************************************************
  * OPERAND RULES
  * Class methods check syntax of operands in instances of instructions.
- ******************************************************************************************/
-class op_rules {
+ ********************************************************************************************/
+class rules {
   /*******************************************************************************************
-   * Only public method of this class. Checks syntax of instruction's operands.
-   * Returns true if values match types or offending value
+   * Method checks syntax of instruction words and returns array with types of arguments.
+   ******************************************************************************************/
+  public function check_instruct($inst_word) {
+    switch(strtolower($inst_word)) {
+      // Instructions without 0 operands
+      case "createframe":
+      case "pushframe":
+      case "popframe":
+      case "return":
+      case "break":
+        $type_arr = array();
+        break;
+
+      // Instructions with 1 operand
+      case "defvar":
+      case "pops":
+        $type_arr = array("var");
+        break;
+      case "call":
+      case "label":
+      case "jump":
+        $type_arr = array("label");
+        break;
+      case "pushs":
+      case "write":
+      case "dprint":
+        $type_arr = array("symb");
+        break;
+
+      // Instructions with 2 operands
+      case "move":
+      case "int2char":
+      case "strlen":
+      case "type":
+        $type_arr = array("var", "symb");
+        break;
+      case "read":
+        $type_arr = array("var", "type");
+        break;
+
+      // Instructions with 3 operands
+      case "add":
+      case "sub":
+      case "mul":
+      case "idiv":
+      case "lt": case "gt": case "eq":
+      case "and": case "or": case "not":
+      case "stri2int":
+      case "concat":
+      case "getchar":
+      case "setchar":
+        $type_arr = array("var", "symb", "symb");
+        break;
+      case "jumpifeq":
+      case "jumpifneq":
+        $type_arr = array("label", "symb", "symb");
+        break;
+      default:
+        $phpLine = __LINE__ + 1;
+        fwrite(STDERR,"Line $instruction->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
+        exit(22);
+    }
+    return $type_arr;
+  }
+
+  /*******************************************************************************************
+   * This method checks syntax of instruction's operands.
+   * Returns true if values match types or offending value.
    ******************************************************************************************/
   public function check_vals($instruction) {
     $ops = $instruction->get_ops();
@@ -623,7 +627,7 @@ class op_rules {
     if( preg_match("/^string@(?:[^\s\\#]|(\\[0-9]{3}))*$/u", $symb) == 1 ||
         preg_match("/^int@[+-]?[0-9]+$/u", $symb) == 1 ||
         preg_match("/^bool@(true|false)$/u", $symb) == 1 ||
-        preg_match("/^nil@nil$/u", $symb)) {
+        preg_match("/^nil@nil$/u", $symb) == 1) {
       //fwrite(STDERR, "checkArgsIF---"); //DIAG
       //fwrite(STDERR, var_dump($this->args)); //DIAG
       //fwrite(STDERR, var_dump($this->types)); //DIAG
