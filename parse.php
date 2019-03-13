@@ -36,18 +36,24 @@ exit(0);
  * This class handles loading IPPcode19 from STDIN and acts as a main class.
  ******************************************************************************************/
 class source_code {
-  private $stats;
-  private $cur_line;
-  private $code_line;
-  private $cur_line_num;
-  private $arg_array;
+  private $stats;             // An instance of stats
+  private $cur_line;          // Original line from stdin being processed
+  private $code_line;         // Line without white-space chars on both ends and comments
+  private $cur_line_num = 0;  // Line number in original file
+  private $arg_array;         // Argument array returned by getopt
 
+  /*****************************************************************************************
+   * Constructor fills the $arg_array memeber variable from $arg_array argument and creates
+   * an instance of a stats class that will be used to record statistics.
+   ****************************************************************************************/
   public function __construct($arg_array) {
     $this->stats = new stats();
     $this->arg_array = $arg_array;
   }
 
-  // Function processes the source code from stdin
+  /*****************************************************************************************
+   * MAIN FUNCTION that reads file line-by-line.
+   ****************************************************************************************/
   public function process() {
     // Flag
     $header_found = false;
@@ -84,6 +90,13 @@ class source_code {
       }
       $instruction = $this->divide();
       $instruction_list->push($instruction);
+    }
+
+    // Check that header was found before the file ended
+    if($header_found == false) {
+      $phpLine = __LINE__ + 1;
+      fwrite(STDERR,"Line $this->cur_line_num: Header \".IPPcode19\" was not found. Thrown at parse.php:$phpLine.\n");
+      exit(21);
     }
 
     $xml = new xml_out();
@@ -172,6 +185,12 @@ class source_code {
 
     // Checking instruction word
     $type_arr = rules::check_instruct($lexemes[0]);
+    // Returns false when wrong opcode was detected
+    if($type_arr === false) {
+      $phpLine = __LINE__ + 1;
+      fwrite(STDERR,"Line $this->cur_line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
+      exit(22);
+    }
     switch(count($type_arr)) {
       case 0:
         $instruction = new instruction_0_op($this->cur_line_num, $lexemes);
@@ -194,7 +213,7 @@ class source_code {
 
       // Throw error - too much lexemes to be a valid instruction
       $phpLine = __LINE__ + 1;
-      fwrite(STDERR,"$this->cur_line_num:$err_char_num: Too many operands. Thrown at parse.php:$phpLine.\n");
+      fwrite(STDERR,"$this->cur_line_num:$err_char_num: Incorrect number of operands. Thrown at parse.php:$phpLine.\n");
       exit(23);
     }
     // Checks operand syntax
@@ -204,7 +223,7 @@ class source_code {
 
       // Throw error - wrong operand type
       $phpLine = __LINE__ + 1;
-      fwrite(STDERR,"$this->cur_line_num:$err_char_num: Syntax error in operand. Thrown at parse.php:$phpLine.\n");
+      fwrite(STDERR,"$this->cur_line_num:$err_char_num: Syntax error in this operand. Thrown at parse.php:$phpLine.\n");
       exit(23);
     }
     // var_dump($instruction); //DIAG
@@ -563,9 +582,7 @@ class rules {
         $type_arr = array("label", "symb", "symb");
         break;
       default:
-        $phpLine = __LINE__ + 1;
-        fwrite(STDERR,"Line $instruction->line_num: Unrecognized instruction. Thrown at parse.php:$phpLine.\n");
-        exit(22);
+        return false;
     }
     return $type_arr;
   }
