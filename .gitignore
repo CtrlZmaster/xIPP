@@ -70,3 +70,4 @@ fabric.properties
 
 # Word Auto Backup File
 Backup of *.doc*
+*.tmp
