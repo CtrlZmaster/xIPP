@@ -7,8 +7,10 @@ Author: Michal Pospíšil (xpospi95@stud.fit.vutbr.cz)
 """
 
 import argparse
+import itertools
 import sys
 from xml.dom import minidom
+import xml.etree.ElementTree as xml_et
 
 
 class FrameSet:
@@ -53,79 +55,114 @@ class Variable:
 
 class Program:
     def __init__(self, parsed_xml):
-        self.parsed_program = parsed_xml
-        self.instructions = []          # Array of instructions
+        self.elem_program = parsed_xml  # Root element program as Element from ElementTree
+        self.instructions = {}          # Dictionary of instructions - keys are their order values (iterate sorted)
         self.labels = {}                # Index names are labels and keys are instruction order values
         self.name = None
         self.description = None
 
     def extract_instructions(self):
-        programs = self.parsed_program.getElementsByTagName("program")
-        if programs.length is not 1:
-            print("Error: Too many program elements.", file=sys.stderr)
+        # Check program attributes
+        program_attr = self.elem_program.attributes()
+        ## Language attribute
+        try:
+            language = program_attr.pop("language")
+        except KeyError:
+            print("Error: Program element is missing a language attribute.", file=sys.stderr)
             sys.exit(32)
-        root_program = programs[0]
-        self.name = root_program.getAttribute("name")
-        self.description = root_program.getAttribute("description")
-
-        instructions = root_program.getElementsByTagName("instruction")
-        for idx, instruction in enumerate(instructions, start=1):
-            # Get order number
-            order = instruction.getAttribute("order")
-            if not order:
-                print("Error: Undefined order attribute.", file=sys.stderr)
-                sys.exit(32)
-            name = instruction.getAttribute("opcode")
-
-            # Get opcode
-            if not name:
-                print("Error: Undefined opcode attribute.", file=sys.stderr)
+        if language != "IPPcode19":
+            print("Error: Program element contains an incorrect language attribute.", file=sys.stderr)
+            sys.exit(32)
+        ## Test for allowed attributes
+        allowed_program_attr = {"language", "name", "description"}
+        for program_attr in program_attr.keys():
+            if program_attr not in allowed_program_attr:
+                print("Error: Invalid attribute in the program element.", file=sys.stderr)
                 sys.exit(32)
 
-            # Get argument 1 and its type if it's present
-            arg1s = instruction.getElementsByTagName("arg1")
-            if arg1s.length > 1:
-                print("Error: Multiple arg1 elements.", file=sys.stderr)
+        # Checking instructions
+        for (idx, instruction) in enumerate(self.elem_program.findall("*")):
+            # Check that only children are instruction elements
+            if instruction.tag() != "instruction":
+                print("Error: Invalid element tag in a child element of the program.", file=sys.stderr)
                 sys.exit(32)
-            elif arg1s.length is 1:
-                arg1 = arg1s[0]
-                arg1_type = arg1.getAttribute("type")
-                if not arg1_type:
-                    print("Error: Undefined type attribute in argument 1 of instruction ", order, ".", file=sys.stderr)
+
+            # Extracting instruction attributes
+            instruction_attr = instruction.attributes()
+            ## Get order number
+            try:
+                order = instruction_attr.pop("order")
+            except KeyError:
+                print("Error: Undefined order attribute in instruction ", idx, '.', file=sys.stderr)
+                sys.exit(32)
+            ### Convert to int and check value
+            try:
+                order = int(order)
+            except ValueError:
+                print("Error: Order attribute in instruction ", idx, " contains an invalid value.", file=sys.stderr)
+                sys.exit(32)
+
+            if order < 1:
+                print("Error: Order attribute in instruction ", order, " is not bigger than 0.", file=sys.stderr)
+                sys.exit(32)
+
+            ## Get opcode
+            try:
+                opcode = instruction_attr.pop("opcode")
+            except KeyError:
+                print("Error: Undefined opcode attribute in instruction ", order, '.', file=sys.stderr)
+                sys.exit(32)
+
+            # Getting and checking arguments - at baseline, none are defined
+            arg1 = None
+            arg1_type = None
+            arg2 = None
+            arg2_type = None
+            arg3 = None
+            arg3_type = None
+            allowed_arg_tags = {'arg1': None, 'arg2': None, 'arg3': None}
+            for argument in instruction.findall("*"):
+                # No instruction elements
+                if argument is None:
+                    print("Error: No instruction elements found.", file=sys.stderr)
                     sys.exit(32)
-                arg1 = arg1.nodeValue
 
-            # Get argument 2 and its type if it's present
-            arg2s = instruction.getElementsByTagName("arg2")
-            if arg2s.length > 1:
-                print("Error: Multiple arg2 elements.", file=sys.stderr)
-                sys.exit(32)
-            elif arg2s.length is 1:
-                arg2 = arg2s[0]
-                arg2_type = arg2.getAttribute("type")
-                if not arg2_type:
-                    print("Error: Undefined type attribute in argument 2 of instruction ", order, ".", file=sys.stderr)
+                # Trying to pop from dictionary with arg tags - fails on unknown and duplicate elements
+                try:
+                    allowed_arg_tags.pop(argument.tag())
+                except KeyError:
+                    print("Error: Too many, duplicate arguments or unrecognized child element of instruction", order,
+                          '.', file=sys.stderr)
                     sys.exit(32)
-                arg2 = arg2.nodeValue
 
-            # Get argument 3 and its type if it's present
-            arg3s = instruction.getElementsByTagName("arg3")
-            if arg3s.length > 1:
-                print("Error: Multiple arg3 elements.", file=sys.stderr)
-                sys.exit(32)
-            elif arg3s.length is 1:
-                arg3 = arg3s[0]
-                arg3_type = arg3.getAttribute("type")
-                if not arg3_type:
-                    print("Error: Undefined type attribute in argument 3 of instruction ", order, ".", file=sys.stderr)
+                # Checking argument attributes
+                arg_attr = argument.attributes()
+                try:
+                    attr_type = arg_attr.pop("type")
+                except KeyError:
+                    print("Error: Type missing in instruction ", order, ", arg"
+                          '.', file=sys.stderr)
                     sys.exit(32)
-                arg3 = arg3.nodeValue
 
-            self.instructions[order] = Instruction(name, arg1, arg2, arg3.nodeValue)
+                # Insert argument and type into the instruction
+                if argument.tag() == "arg1":
+                    arg1 = argument.text
+                    arg1_type = attr_type
+
+                if argument.tag() == "arg2":
+                    arg2 = argument.text
+                    arg2_type = attr_type
+
+                if argument.tag() == "arg3":
+                    arg3 = argument.text
+                    arg3_type = attr_type
+
+            self.instructions[order] = Instruction(order, opcode, arg1, arg2, arg3, arg1_type, arg2_type, arg3_type)
 
 
 class Instruction:
-    def __init__(self, name, arg1=None, arg2=None, arg3=None, arg1_type=None, arg2_type=None, arg3_type=None):
+    def __init__(self, order, name, arg1, arg2, arg3, arg1_type, arg2_type, arg3_type):
+        self.order = order
         self.name = name
         self.argv = []
         self.arg_types = []
@@ -181,13 +218,21 @@ class Instruction:
             'JUMPIFNEQ': "['label','symb','symb']"
         }
         try:
-            # eval expands to a list assignment based on opcode
+            # eval expands to a list assignment based on the opcode
             self.expected_arg_types = eval(param_values[name])
         except KeyError:
             print("Error: Unknown instruction name.", file=sys.stderr)
             sys.exit(32)
 
-        # PREEMPTIVE TYPE CONTROL
+        # PREEMPTIVE TYPE CHECKING
+        accepted_as_symb = {"int", "bool", "string", "nil", "var"}
+        for (arg_type, expected_arg_type) in itertools.zip_longest(self.arg_types, self.expected_arg_types):
+            if arg_type != expected_arg_type:
+                if expected_arg_type == "symb" and arg_type in accepted_as_symb:
+                    pass
+                else:
+                    print("Error: Wrong argument type in instruction ", self.order, ".", file=sys.stderr)
+                    sys.exit(53)
 
 
 class Args:
@@ -220,13 +265,17 @@ args = Args.parse()
 if args.source is not False:
     with open(args.source) as source_file:
         # Reading code from a file
-        xml_dom = minidom.parse(source_file)
-        program = Program(xml_dom)
+        xml_root = xml_et.parse(source_file).getRoot()
+        program = Program(xml_root)
 else:
     # Reading code from stdin (source arg not set)
     source = sys.stdin.read()
-    xml_dom = minidom.parseString(source)
-    program = Program(xml_dom)
+    xml_root = xml_et.fromstring(source)
+    program = Program(xml_root)
 
 # Now we have a program instance
 program.extract_instructions()
+
+print(program.instructions[0].name)
+
+exit(0)
