@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="program">
+    <xs:attribute name="language" type="xs:string" use="required"/>
+    <xs:attribute name="name" type="xs:string"/>
+    <xs:attribute name="description" type="xs:string"/>
+    <xs:complexType>
+      <xs:choice maxOccurs="unbounded">
+          <xs:element name="instruction">
+            <xs:attribute name="order" type="xs:integer" use="required">
+              <xs:restriction base="xs:integer">
+                <xs:minInclusive value="1"/>
+              </xs:restriction>
+            </xs:attribute>
+            <xs:attribute name="opcode" type="xs:string" use="required"/>
+            <xs:complexType>
+              <xs:all minOccurs="0">
+                <xs:element name="arg1" type="xs:string">
+                  <xs:attribute name="type" type="xs:string" use="required">
+                    <xs:restriction base="xs:string">
+                      <xs:enumeration value="int"/>
+                      <xs:enumeration value="bool"/>
+                      <xs:enumeration value="string"/>
+                      <xs:enumeration value="nil"/>
+                      <xs:enumeration value="label"/>
+                      <xs:enumeration value="type"/>
+                      <xs:enumeration value="var"/>
+                    </xs:restriction>
+                  </xs:attribute>
+                </xs:element>
+                <xs:element name="arg2" type="xs:string">
+                  <xs:attribute name="type" type="xs:string" use="required">
+                    <xs:restriction base="xs:string">
+                      <xs:enumeration value="int"/>
+                      <xs:enumeration value="bool"/>
+                      <xs:enumeration value="string"/>
+                      <xs:enumeration value="nil"/>
+                      <xs:enumeration value="label"/>
+                      <xs:enumeration value="type"/>
+                      <xs:enumeration value="var"/>
+                    </xs:restriction>
+                  </xs:attribute>
+                </xs:element>
+                <xs:element name="arg3" type="xs:string">
+                  <xs:attribute name="type" type="xs:string" use="required">
+                    <xs:restriction base="xs:string">
+                      <xs:enumeration value="int"/>
+                      <xs:enumeration value="bool"/>
+                      <xs:enumeration value="string"/>
+                      <xs:enumeration value="nil"/>
+                      <xs:enumeration value="label"/>
+                      <xs:enumeration value="type"/>
+                      <xs:enumeration value="var"/>
+                    </xs:restriction>
+                  </xs:attribute>
+                </xs:element>
+              </xs:all>
+            </xs:complexType>
+          </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
