@@ -63,7 +63,7 @@ class Program:
 
     def extract_instructions(self):
         # Check program attributes
-        program_attr = self.elem_program.attributes()
+        program_attr = self.elem_program.attrib
         ## Language attribute
         try:
             language = program_attr.pop("language")
@@ -81,14 +81,19 @@ class Program:
                 sys.exit(32)
 
         # Checking instructions
-        for (idx, instruction) in enumerate(self.elem_program.findall("*")):
+        for (idx, instruction) in enumerate(self.elem_program.findall("*"), start=1):
+            # No instruction elements
+            if instruction is None:
+                print("Error: No instruction elements found.", file=sys.stderr)
+                sys.exit(32)
+
             # Check that only children are instruction elements
-            if instruction.tag() != "instruction":
+            if instruction.tag != "instruction":
                 print("Error: Invalid element tag in a child element of the program.", file=sys.stderr)
                 sys.exit(32)
 
             # Extracting instruction attributes
-            instruction_attr = instruction.attributes()
+            instruction_attr = instruction.attrib
             ## Get order number
             try:
                 order = instruction_attr.pop("order")
@@ -122,21 +127,16 @@ class Program:
             arg3_type = None
             allowed_arg_tags = {'arg1': None, 'arg2': None, 'arg3': None}
             for argument in instruction.findall("*"):
-                # No instruction elements
-                if argument is None:
-                    print("Error: No instruction elements found.", file=sys.stderr)
-                    sys.exit(32)
-
                 # Trying to pop from dictionary with arg tags - fails on unknown and duplicate elements
                 try:
-                    allowed_arg_tags.pop(argument.tag())
+                    allowed_arg_tags.pop(argument.tag)
                 except KeyError:
                     print("Error: Too many, duplicate arguments or unrecognized child element of instruction", order,
                           '.', file=sys.stderr)
                     sys.exit(32)
 
                 # Checking argument attributes
-                arg_attr = argument.attributes()
+                arg_attr = argument.attrib
                 try:
                     attr_type = arg_attr.pop("type")
                 except KeyError:
@@ -144,17 +144,21 @@ class Program:
                           '.', file=sys.stderr)
                     sys.exit(32)
 
+                arg_text = argument.text  # Element without text returns has text set to None - treating here
+                if arg_text is None:
+                    arg_text = ""
+
                 # Insert argument and type into the instruction
-                if argument.tag() == "arg1":
-                    arg1 = argument.text
+                if argument.tag == "arg1":
+                    arg1 = arg_text
                     arg1_type = attr_type
 
-                if argument.tag() == "arg2":
-                    arg2 = argument.text
+                if argument.tag == "arg2":
+                    arg2 = arg_text
                     arg2_type = attr_type
 
-                if argument.tag() == "arg3":
-                    arg3 = argument.text
+                if argument.tag == "arg3":
+                    arg3 = arg_text
                     arg3_type = attr_type
 
             self.instructions[order] = Instruction(order, opcode, arg1, arg2, arg3, arg1_type, arg2_type, arg3_type)
@@ -166,13 +170,13 @@ class Instruction:
         self.name = name
         self.argv = []
         self.arg_types = []
-        if arg1:
+        if arg1_type:
             self.argv.append(arg1)
             self.arg_types.append(arg1_type)
-        if arg2:
+        if arg2_type:
             self.argv.append(arg2)
             self.arg_types.append(arg2_type)
-        if arg3:
+        if arg3_type:
             self.argv.append(arg3)
             self.arg_types.append(arg3_type)
 
@@ -194,7 +198,7 @@ class Instruction:
             'EXIT': "['symb']",
             'DPRINT': "['symb']",
             # 2 ARGUMENTS
-            'MOVE': "['var', 'symb']'",
+            'MOVE': "['var', 'symb']",
             'INT2CHAR': "['var', 'symb']",
             'READ': "['var', 'type']",
             'STRLEN': "['var', 'symb']",
@@ -226,12 +230,15 @@ class Instruction:
 
         # PREEMPTIVE TYPE CHECKING
         accepted_as_symb = {"int", "bool", "string", "nil", "var"}
-        for (arg_type, expected_arg_type) in itertools.zip_longest(self.arg_types, self.expected_arg_types):
+        arg_num = 0
+        for arg_type, expected_arg_type in itertools.zip_longest(self.arg_types, self.expected_arg_types):
+            arg_num = arg_num + 1
             if arg_type != expected_arg_type:
                 if expected_arg_type == "symb" and arg_type in accepted_as_symb:
                     pass
                 else:
-                    print("Error: Wrong argument type in instruction ", self.order, ".", file=sys.stderr)
+                    print("Error: Argument", arg_num, " in instruction ", self.order, "has incorrect type.",
+                          file=sys.stderr)
                     sys.exit(53)
 
 
@@ -265,7 +272,7 @@ args = Args.parse()
 if args.source is not False:
     with open(args.source) as source_file:
         # Reading code from a file
-        xml_root = xml_et.parse(source_file).getRoot()
+        xml_root = xml_et.parse(source_file).getroot()
         program = Program(xml_root)
 else:
     # Reading code from stdin (source arg not set)
@@ -276,6 +283,5 @@ else:
 # Now we have a program instance
 program.extract_instructions()
 
-print(program.instructions[0].name)
 
 exit(0)
