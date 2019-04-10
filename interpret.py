@@ -197,12 +197,12 @@ class Variable:
 def decode_escapes(s):
     '''Helper function that reverses escaping done by xml.etree
 
-    Obtained from: https://stackoverflow.com/a/24519338
+       Ideas from https://stackoverflow.com/a/24519338 and https://stackoverflow.com/a/21301416
     '''
-    escape_sequence_re = re.compile(r'\\[0-9]{3}', re.UNICODE | re.VERBOSE)
+    escape_sequence_re = re.compile(r'\\([0-9]{3})', re.UNICODE | re.VERBOSE)
 
     def decode_match(match):
-        return codecs.decode(match.group(0), 'unicode-escape')
+        return codecs.decode(chr(int(match.group(1))), 'unicode-escape')
 
     return escape_sequence_re.sub(decode_match, s)
 
@@ -216,6 +216,8 @@ class Program:
         self.description = None
         self.frameset = FrameSet()
         self.callstack = []             # List of return indices from call instructions to return instructions
+        self.order_next = None          # For passing values to callstack (remembers last next instruction)
+        self.order_jumpto = None        # For passing values from jump instructions to execution loop
 
     def extract_instructions(self):
         # Check program attributes
@@ -319,12 +321,34 @@ class Program:
                     arg3 = arg_text
                     arg3_type = attr_type
 
+                # Build label dictionary
+                if opcode == "LABEL":
+                    self.labels[arg1] = order
+
             self.instructions[order] = Instruction(order, opcode, arg1, arg2, arg3, arg1_type, arg2_type, arg3_type)
 
     def execute(self):
-        for instruction_key in self.instructions.keys():
+        instruction_keys = sorted(self.instructions.keys())
+        instruction_key = min(instruction_keys)
+        end = True
+
+        while end:
+            # Find next instruction key (can be bigger than +1) in case that call instruction is called
+            try:
+                self.order_next = instruction_keys[instruction_keys.index(instruction_key) + 1]
+            except IndexError:
+                end = False
+
             # Passing program instance because instructions need to change frames, variables, etc.
             self.instructions[instruction_key].execute(self)
+
+            if self.order_jumpto is None:
+                # Update instruction key with original next value
+                instruction_key = self.order_next
+            else:
+                # Jump/return instruction was performed, next order is determined by order_jumpto
+                instruction_key = self.order_jumpto
+                self.order_jumpto = None
 
 
 class Instruction:
@@ -491,12 +515,15 @@ class Instruction:
         program_instance.frameset.set_var(self.argv[0])
 
     def instr_call(self, program_instance):
-        pass
+        program_instance.callstack.append(program_instance.order_next)
+        program_instance.order_next = None
 
     def instr_pushs(self, program_instance):
+        # UNSUPPORTED
         pass
 
     def instr_pops(self, program_instance):
+        # UNSUPPORTED
         pass
 
     def instr_write(self, program_instance):
@@ -514,13 +541,26 @@ class Instruction:
         print(retval, end='')
 
     def instr_label(self, program_instance):
+        # DO NOTHING
         pass
 
     def instr_jump(self, program_instance):
-        pass
+        try:
+            jumpto = program_instance.labels[self.argv[0]]
+        except KeyError:
+            print("interpret.py:", self.order, ": Label", self.argv[0], " doesn't exist.",
+                  file=sys.stderr)
+            sys.exit(57)
+        program_instance.order_jumpto = jumpto
 
     def instr_exit(self, program_instance):
-        pass
+        retval = self.read_symb(program_instance, 1, self.order)
+        if retval < 0 or retval > 49:
+            print("interpret.py:", self.order, ": Invalid exit code.",
+                  file=sys.stderr)
+            sys.exit(57)
+
+        sys.exit(retval)
 
     def instr_dprint(self, program_instance):
         pass
@@ -584,17 +624,55 @@ class Instruction:
             result = arg2 + arg3
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Variable must be of type int.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Both variables must be of type int.", file=sys.stderr)
             exit(53)
 
     def instr_lt(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        arg3 = self.read_symb(program_instance, 3, self.order)
+        if (isinstance(arg2, int) and isinstance(arg3, int)) or \
+           (isinstance(arg2, str) and isinstance(arg3, str)) or \
+           (isinstance(arg2, bool) and isinstance(arg3, bool)):
+            result = arg2 < arg3
+            if result is True:
+                program_instance.frameset.update_var(self.argv[0], "bool@true", self.order)
+            else:
+                program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
+        else:
+            print("interpret.py:", self.order, ": Both variables must be of type int, bool or string.", file=sys.stderr)
+            exit(53)
 
     def instr_gt(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        arg3 = self.read_symb(program_instance, 3, self.order)
+        if (isinstance(arg2, int) and isinstance(arg3, int)) or \
+           (isinstance(arg2, str) and isinstance(arg3, str)) or \
+           (isinstance(arg2, bool) and isinstance(arg3, bool)):
+            result = arg2 > arg3
+            if result is True:
+                program_instance.frameset.update_var(self.argv[0], "bool@true", self.order)
+            else:
+                program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
+        else:
+            print("interpret.py:", self.order, ": Both variables must be of type int, bool or string.", file=sys.stderr)
+            exit(53)
 
     def instr_eq(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        arg3 = self.read_symb(program_instance, 3, self.order)
+        if (isinstance(arg2, int) and isinstance(arg3, int)) or \
+           (isinstance(arg2, str) and isinstance(arg3, str)) or \
+           (isinstance(arg2, bool) and isinstance(arg3, bool)) or \
+           (arg2 is None and arg3 is None):
+            result = arg2 == arg3
+            if result is True:
+                program_instance.frameset.update_var(self.argv[0], "bool@true", self.order)
+            else:
+                program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
+        else:
+            print("interpret.py:", self.order, ": Both variables must be of type int, bool, string or nil.",
+                  file=sys.stderr)
+            exit(53)
 
     def instr_and(self, program_instance):
         pass
@@ -618,10 +696,46 @@ class Instruction:
         pass
 
     def instr_jumpifeq(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        arg3 = self.read_symb(program_instance, 3, self.order)
+        if (isinstance(arg2, int) and isinstance(arg3, int)) or \
+           (isinstance(arg2, str) and isinstance(arg3, str)) or \
+           (isinstance(arg2, bool) and isinstance(arg3, bool)) or \
+           (arg2 is None and arg3 is None):
+            result = arg2 == arg3
+            if result is True:
+                try:
+                    jumpto = program_instance.labels[self.argv[0]]
+                except KeyError:
+                    print("interpret.py:", self.order, ": Label", self.argv[0], " doesn't exist.",
+                          file=sys.stderr)
+                    sys.exit(57)
+                program_instance.order_jumpto = jumpto
+        else:
+            print("interpret.py:", self.order, ": Both variables must be of type int, bool, string or nil.",
+                  file=sys.stderr)
+            exit(53)
 
     def instr_jumpifneq(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        arg3 = self.read_symb(program_instance, 3, self.order)
+        if (isinstance(arg2, int) and isinstance(arg3, int)) or \
+           (isinstance(arg2, str) and isinstance(arg3, str)) or \
+           (isinstance(arg2, bool) and isinstance(arg3, bool)) or \
+           (arg2 is None and arg3 is None):
+            result = arg2 == arg3
+            if result is False:
+                try:
+                    jumpto = program_instance.labels[self.argv[0]]
+                except KeyError:
+                    print("interpret.py:", self.order, ": Label", self.argv[0], " doesn't exist.",
+                          file=sys.stderr)
+                    sys.exit(57)
+                program_instance.order_jumpto = jumpto
+        else:
+            print("interpret.py:", self.order, ": Both variables must be of type int, bool, string or nil.",
+                  file=sys.stderr)
+            exit(53)
 
 
 class Args:
