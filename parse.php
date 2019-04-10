@@ -559,6 +559,7 @@ class rules {
       case "int2char":
       case "strlen":
       case "type":
+      case "not":
         $type_arr = array("var", "symb");
         break;
       case "read":
@@ -571,7 +572,7 @@ class rules {
       case "mul":
       case "idiv":
       case "lt": case "gt": case "eq":
-      case "and": case "or": case "not":
+      case "and": case "or":
       case "stri2int":
       case "concat":
       case "getchar":
