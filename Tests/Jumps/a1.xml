@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<program language="IPPcode19">
+  <instruction order="1" opcode="WRITE">
+    <arg1 type="string">Program,\032ktorý\032skáče\010</arg1>
+  </instruction>
+  <instruction order="2" opcode="JUMP">
+    <arg1 type="label">there</arg1>
+  </instruction>
+  <instruction order="3" opcode="WRITE">
+    <arg1 type="string">sa\032nevypíše\010</arg1>
+  </instruction>
+  <instruction order="4" opcode="LABEL">
+    <arg1 type="label">there</arg1>
+  </instruction>
+  <instruction order="5" opcode="WRITE">
+    <arg1 type="string">Sem\032sme\032skočili\010</arg1>
+  </instruction>
+</program>

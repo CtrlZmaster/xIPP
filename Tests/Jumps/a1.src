@@ -1,0 +1,10 @@
+.IPPcode19
+
+write string@Program,\032ktorý\032skáče\010
+
+jump there
+
+write string@sa\032nevypíše\010
+
+label there
+write string@Sem\032sme\032skočili\010
