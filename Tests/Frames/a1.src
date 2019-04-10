@@ -1,5 +1,8 @@
 .ippcode19
 
 CREATEFRAME
+DEFVAR TF@var1
 
 PUSHFRAME
+MOVE LF@var1 string@Hello\032world!\012
+WRITE LF@var1

@@ -1,0 +1,6 @@
+.ippcode19
+WRITE bool@true
+Write string@\010
+WRITE nil@nil
+Write string@\010
+WRITE string@Hello\032world

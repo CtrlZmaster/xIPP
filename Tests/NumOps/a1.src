@@ -1,0 +1,7 @@
+.IPPcode19
+
+DEFVAR GF@osem
+MOVE GF@osem int@8
+DEFVAR GF@vysledok
+SUB GF@vysledok GF@osem int@10
+write GF@vysledok

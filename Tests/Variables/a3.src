@@ -1,0 +1,5 @@
+.ippcode19
+
+DEFvar GF@variable
+MOVE GF@variable bool@true
+write GF@variable

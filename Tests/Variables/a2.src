@@ -1,0 +1,5 @@
+.ippcode19
+
+DEFvar GF@variable
+MOVE GF@variable string@hello\012\012\012
+write GF@variable
