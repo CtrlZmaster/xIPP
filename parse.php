@@ -459,6 +459,7 @@ class instruction_3_op extends instruction_2_op {
   public function __construct($line_num, $lexemes, $type_arr) {
     //var_dump($lexemes); //DIAG
     $this->line_num = $line_num;
+    $this->opcode = $lexemes[0];
     $this->fill_vals($lexemes[1], $lexemes[2], $lexemes[3]);
     $this->fill_types($type_arr[0], $type_arr[1], $type_arr[2]);
   }
