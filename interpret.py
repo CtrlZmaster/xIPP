@@ -16,15 +16,35 @@ import codecs
 
 
 class FrameSet:
+    '''Holds all frames
+
+       This class implements global and temporary frame. It also contains local frame stack. Frames are implemented as
+       separate classes. Global frame is the only defined frame at program start.
+    '''
     def __init__(self):
+        '''Frameset constructor
+
+           Initializes global frame and creates empty local frame stack and undefined temporary frame.
+        '''
         self.local_frame_stack = []
         self.global_frame = Frame("global")
         self.temporary_frame = None
 
     def init_temporary_frame(self):
+        '''Initializes the temporary frame
+
+            Creates a new instance of a temporary frame. Rewrites the existing temporary frame.
+        '''
         self.temporary_frame = Frame("temporary")
 
     def set_var(self, name):
+        '''Defines a variable
+
+           Creates an empty variable on a frame defined in variable's name. This function calls a function with the
+           same name defined in class frame.
+           @param name Name of variable in format (TF|LF|GF)@<var_name>
+        :return:
+        '''
         exploded = re.split(r'@', name, maxsplit=1)
         scope = exploded[0]
         identifier = exploded[1]
@@ -51,6 +71,14 @@ class FrameSet:
             sys.exit(55)
 
     def update_var(self, name, value, order):
+        '''Change value of a variable
+
+           Changes value of a variable on the frame defined in variable's name. Any value is supported, current type
+           of variable is unimportant.
+           @param name Name of variable in format (TF|LF|GF)@<var_name>
+           @param value Value to be written to the variable (in IPPcode19 syntax)
+           @param order Order tag of the invoking instruction - used for error reporting
+        '''
         exploded = re.split(r'@', name, maxsplit=1)
         scope = exploded[0]
         identifier = exploded[1]
@@ -84,6 +112,14 @@ class FrameSet:
                 sys.exit(54)
 
     def get_var(self, name, order):
+        '''Get variable as an object
+
+           Function returns an instance of class Variable that was created during parsing and it's saved in the frame
+           defined in variable's name.
+           @param name Name of variable in format (TF|LF|GF)@<var_name>
+           @param order Order tag of the invoking instruction - used for error reporting
+           @return Variable instance of class Variable
+        '''
         exploded = re.split(r'@', name, maxsplit=1)
         scope = exploded[0]
         identifier = exploded[1]
@@ -129,6 +165,12 @@ class FrameSet:
             sys.exit(55)
 
     def push_temp(self, order):
+        '''Places temporary frame on top of local frame stack
+
+           Copies the temporary frame to the top of the local frame stack. Variable names donþt need to be updated,
+           as they are stored without a frame name.
+           @param order Order tag of the invoking instruction - used for error reporting
+        '''
         if self.temporary_frame is None:
             print("interpret.py:", order, ": Temporary frame is not defined.", file=sys.stderr, sep='')
             sys.exit(55)
@@ -138,6 +180,11 @@ class FrameSet:
         self.temporary_frame = None
 
     def pop_local(self, order):
+        '''Pops local frame into the temporary frame
+
+           Takes the top local frame and replaces the temporary frame with it.
+           @param order Order tag of the invoking instruction - used for error reporting
+        '''
         try:
             self.temporary_frame = self.local_frame_stack.pop()
         except IndexError:
@@ -146,20 +193,53 @@ class FrameSet:
 
 
 class Frame:
+    '''Frame that holds variables
+
+       Variables are stored in a dictionary, where keys are variable names without the frame specification and values
+       are instances of class Variable.
+    '''
     def __init__(self, scope):
+        '''Frame constructor
+
+           Creates an empty frame.
+           @param scope Takes the scope of the frame: local, global, temporary
+        '''
         self.scope = scope
         self.vars = {}
 
     def set_var(self, identifier):
-        self.vars[identifier] = Variable()
+        '''Creates a new variable
+
+           Creates an instance of class Variable on the frame.
+           @param identifier Name of the variable (without frame)
+        '''
+        try:
+            self.vars[identifier]
+        except KeyError:
+            self.vars[identifier] = Variable()
+            return
+
+        raise KeyError
 
     def update_var(self, identifier, value):
+        '''Changes value of a variable
+
+           Calls method of class Varibale on the variable from a dictionary.
+           @param identifier Name of the variable (without frame)
+           @param value Value to write
+        '''
         try:
             self.vars[identifier].set_value(value)
         except KeyError:
             raise
 
     def get_var(self, identifier):
+        '''Returns variable object
+
+           Returns reference to the object from the variable dictionary.
+           @param identifier Name of the variable (without frame)
+           @return Instance of class Variable
+        '''
         try:
             retval = self.vars[identifier]
         except KeyError:
@@ -169,11 +249,26 @@ class Frame:
 
 
 class Variable:
+    '''Class implementing variable
+
+       This class doesn't conatin the variable's name - itþs stored as the key in variable dictionary that is defined
+       in a frame. It stores variable's value and type - IPPcode19 supports dynamic typing.
+    '''
     def __init__(self):
+        '''Variable constructor
+
+           Undefined variable has empty string value when undefined. The fact that is undefined is stored in the type
+           as "undefined". Types can be int, string, bool and nil. They are changed dynamically when the value changes.
+           Value is stored as a Python variable - not in IPPcode19 syntax.
+        '''
         self.value = ""
         self.type = "undefined"
 
     def set_value(self, value):
+        '''Changes variable's value
+
+           @param value Desired value in IPPcode19 syntax
+        '''
         self.value = value
         if isinstance(value, str):
             self.type = "string"
@@ -188,6 +283,10 @@ class Variable:
             self.type = "nil"
 
     def get_type(self):
+        '''Checks the variable type
+
+           @return Type of the variable - int, string, bool, nil
+        '''
         if self.type == "var":
             if isinstance(self.value, str):
                 self.type = "string"
@@ -211,6 +310,9 @@ def decode_escapes(s):
     '''Helper function that reverses escaping done by xml.etree
 
        Ideas from https://stackoverflow.com/a/24519338 and https://stackoverflow.com/a/21301416
+       @param s String to be unescaped
+       @return Unescaped string
+       @pre String cannot be empty
     '''
     escape_sequence_re = re.compile(r'\\([0-9]{3})', re.UNICODE | re.VERBOSE)
 
@@ -221,22 +323,46 @@ def decode_escapes(s):
 
 
 class Program:
+    '''Program class
+
+       Program class holds instructions parsed from the xml. To handle jumps, it contains dictionary of labels - keys
+       are labels and values are instruction jump tags. Method execute is used as main loop of the interpreter, so
+       frameset and subsequently frames and variables are stored here for easy access. Member variables order_next
+       and order_jumpto are used to interchange order tags when instructions change control flow - this is a result
+       of flawed design.
+    '''
     def __init__(self, parsed_xml):
+        '''Program constructor
+
+           Creates a new program instance.
+           @param parsed_xml Used to pass ElementTree created by the XML parser
+        '''
         self.elem_program = parsed_xml  # Root element program as Element from ElementTree
         self.instructions = {}          # Dictionary of instructions - keys are their order values (iterate sorted)
         self.labels = {}                # Index names are labels and keys are instruction order values
-        self.name = None
-        self.description = None
-        self.frameset = FrameSet()
+        self.name = None                # DEPRECATED: Value of attribute name in element program
+        self.description = None         # DEPRECATED: Value of attribute description in element program
+        self.frameset = FrameSet()      # Frameset instance taht contains frames and variables
         self.callstack = []             # List of return indices from call instructions to return instructions
         self.order_next = None          # For passing values to callstack (remembers last next instruction)
         self.order_jumpto = None        # For passing values from jump instructions to execution loop
         self.stdin_file = None          # A file object that contains a file when --input argument was given
 
     def set_input(self, stdin_file):
+        '''Input file
+
+           Saves a file object with inputs for READ instructions so it can be easily accessed.
+           @param stdin_file A file object with inputs for READ instruction
+        '''
         self.stdin_file = stdin_file
 
     def extract_instructions(self):
+        '''XML parser and checker
+
+           This method reads the ElementTree and checks that is syntactically correct. This implementation supports
+           instructions out-of-order and with non-following order attributes. XML should strictly follow the specifi-
+           cation, invalid values and unsupported elements raise an error. XML comments are allowed.
+        '''
         # Check program attributes
         program_attr = self.elem_program.attrib
         ## Language attribute
@@ -346,6 +472,10 @@ class Program:
             self.instructions[order] = Instruction(order, opcode, arg1, arg2, arg3, arg1_type, arg2_type, arg3_type)
 
     def execute(self):
+        '''Main interpreter loop
+
+           This method implements executing the instructions in the interpreter.
+        '''
         instruction_keys = sorted(self.instructions.keys())
         instruction_key = min(instruction_keys)
         end = True
@@ -372,15 +502,15 @@ class Program:
 class Instruction:
     """Instruction representation
 
-       Implements
+       Implements the instruction syntax checking and the actual implementation of every instruction in methods instr_*.
     """
 
-    accepted_const = {"int", "bool", "string", "nil"}
+    accepted_const = {"int", "bool", "string", "nil"}  # Strings that are accepted as type
 
     def __init__(self, order, name, arg1, arg2, arg3, arg1_type, arg2_type, arg3_type):
         """Instruction constructor
 
-           Takes
+           Takes the order tag for error reporting, opcode and arguments along with types from the XML.
         """
         self.order = order
         self.name = name
@@ -460,9 +590,78 @@ class Instruction:
         self.check_arg_syntax()
 
     def check_arg_syntax(self):
-        pass
+        '''Performs syntax checking on symbols
+
+           Checks syntax of constant values and variable names. Variables are not checked on runtime.
+        '''
+
+        def check_var(var):
+            '''Helper for function check_arg_syntax - checks variable.
+
+               @returns true if values match types or value of incorrect operand.
+            '''
+            if re.fullmatch(r"(GF|TF|LF)@([A-Za-z]|[_\-$&%*])([A-Za-z\d]|[_\-$&%*])*", var) is None:
+                print("interpret.py:", self.order, ": Variable/constant ", var, " has incorrect syntax.",
+                      file=sys.stderr, sep='')
+                sys.exit(52)
+
+        def check_symb(symb):
+            '''Helper for function check_arg_syntax - checks symbols.
+               
+               @returns True if values match types or value of incorrect operand.
+            '''
+            # Can represent variable or constant
+            # Checking format of an immediate value - string, int, bool
+
+            if re.fullmatch(r"([^#\\]|(\w))*", symb) is not None or \
+               re.fullmatch(r"[+-]?[0-9]+", symb) is not None or \
+               re.fullmatch(r"true|false", symb) is not None or \
+               re.fullmatch(r"nil", symb) is not None:
+                pass
+            else:
+                check_var(symb)
+
+        def check_label(label):
+            '''Helper for function check_arg_syntax - checks label.
+
+               @returns true if values match types or value of incorrect operand.
+            '''
+
+            if re.fullmatch(r"([A-Za-z]|[_\-$&%*])(\w|[\-$&%*])*", label) is None:
+                print("interpret.py:", self.order, ": Label ", label, " has incorrect syntax.",
+                      file=sys.stderr, sep='')
+                sys.exit(52)
+
+        def check_type(v_type):
+            '''Helper for function check_arg_syntax - checks data type name.
+
+               @returns True if values match types or value of incorrect operand.
+            '''
+            if v_type == "string" or v_type == "int" or v_type == "bool" or v_type == "nil":
+                return True
+
+            return v_type
+
+        # Resolve which function to call based on expected_type
+        for arg, exp_type in itertools.zip_longest(self.argv, self.expected_arg_types):
+            if exp_type == "label":
+                return check_label(arg)
+            elif exp_type == "var":
+                return check_var(arg)
+            elif exp_type == "symb":
+                return check_symb(arg)
+            elif exp_type == "type":
+                return check_type(arg)
 
     def read_var(self, program_instance, arg_idx, order):
+        '''Get value of a variable
+
+           Gets the value of a variable on runtime. Checks if it's defined otherwise raises an error.
+           @param program_instance Instance of a program (to access variables)
+           @param arg_idx Selects variable from given argument index (1-3)
+           @param order Order tag of invoking instruction (for error reporting)
+           @return Pythonic variable value
+        '''
         retval = program_instance.frameset.get_var(self.argv[arg_idx], order)
         if retval.type == "undefined":
             print("interpret.py:", self.order, ": Variable", self.argv[arg_idx], "is undefined.",
@@ -558,7 +757,12 @@ class Instruction:
 
     # 1 ARGUMENT
     def instr_defvar(self, program_instance):
-        program_instance.frameset.set_var(self.argv[0])
+        try:
+            program_instance.frameset.set_var(self.argv[0])
+        except KeyError:
+            print("interpret.py:", self.order, ": Label ", self.argv[0], " doesn't exist.",
+                  file=sys.stderr, sep='')
+            sys.exit(52)
 
     def instr_call(self, program_instance):
         program_instance.callstack.append(program_instance.order_next)
@@ -567,7 +771,7 @@ class Instruction:
         except KeyError:
             print("interpret.py:", self.order, ": Label ", self.argv[0], " doesn't exist.",
                   file=sys.stderr, sep='')
-            sys.exit(57)
+            sys.exit(52)
         program_instance.order_jumpto = jumpto
 
     def instr_pushs(self, program_instance):
@@ -932,12 +1136,23 @@ class Instruction:
 
 
 class Args:
+    '''Arguments class
+
+       Implements argument parsing and opening necessary files.
+    '''
     def __init__(self):
+        '''Argument class constructor
+
+        '''
         self.source_file = False
         self.input_file = False
         self.help = False
 
     def parse(self):
+        '''Argument parser
+
+           Parses the arguments and handles argument logic. Prints help if needed.
+        '''
         try:
             arguments, tail = getopt.getopt(sys.argv[1:], "", ["help", "source=", "input="])
         except getopt.GetoptError:
@@ -968,6 +1183,10 @@ class Args:
 
     @staticmethod
     def print_help():
+        '''Prints help
+
+           Prints the help and ends the program successfully.
+        '''
         print("USAGE:")
         print("python3.6 interpret.py (--help | --source=SOURCE | --input=INPUT)")
         print()
@@ -989,8 +1208,11 @@ class Args:
 """
 SCRIPT EXECUTION POINT
 """
+# Read arguments
 args = Args()
 args.parse()
+
+# Implicitly false until set
 if args.source_file is not False:
     try:
         source_file = open(args.source_file)
@@ -1018,6 +1240,7 @@ else:
 
     program = Program(xml_root)
 
+# Implicitly false until set
 if args.input_file is not False:
     try:
         input_file = open(args.input_file)
@@ -1033,7 +1256,7 @@ program.extract_instructions()
 # Start the interpreter
 program.execute()
 
-# Close the input file
+# Close the input file if needed
 if program.stdin_file is not None:
     program.stdin_file.close()
 
