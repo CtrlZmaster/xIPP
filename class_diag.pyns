@@ -1,0 +1,12 @@
+# PynSource Version 1.2
+{'type':'meta', 'info1':'Lorem ipsum dolor sit amet, consectetur adipiscing elit is latin. Comments are saved.'}
+{'type':'umlshape', 'id':'FrameSet', 'x':20, 'y':9, 'width':150, 'height':209, 'attrs': 'global_frame|temporary_frame|local_frame_stack', 'meths': 'push_temp|get_var|__init__|init_temporary_frame|update_var|pop_local|set_var'}
+{'type':'umlshape', 'id':'Frame', 'x':19, 'y':257, 'width':151, 'height':149, 'attrs': 'scope|vars', 'meths': 'update_var|set_var|get_var|__init__'}
+{'type':'umlshape', 'id':'Variable', 'x':20, 'y':443, 'width':150, 'height':149, 'attrs': 'type|value', 'meths': 'get_type|set_value|get_value|__init__'}
+{'type':'umlshape', 'id':'Program', 'x':211, 'y':9, 'width':150, 'height':269, 'attrs': 'frameset|stdin_file|callstack|order_next|order_jumpto|labels|name|elem_program|instructions|description', 'meths': 'execute|extract_instructions|__init__|set_input'}
+{'type':'umlshape', 'id':'Instruction', 'x':403, 'y':8, 'width':188, 'height':802, 'attrs': 'arg_types|expected_arg_types|accepted_const|name|order|argv', 'meths': 'instr_gt|instr_createframe|instr_jump|instr_add|instr_jumpifneq|instr_type|instr_write|instr_label|instr_strlen|check_var|instr_dprint|check_type|instr_return|instr_break|instr_concat|read_symb|instr_defvar|instr_read|execute|instr_eq|instr_sub|instr_getchar|instr_jumpifeq|instr_and|instr_lt|instr_setchar|__init__|instr_popframe|instr_pops|check_label|instr_call|instr_idiv|instr_exit|read_var|instr_stri2int|instr_int2char|instr_mul|check_symb|instr_pushframe|check_arg_syntax|instr_or|instr_move|instr_pushs|instr_not'}
+{'type':'umlshape', 'id':'Args', 'x':211, 'y':300, 'width':150, 'height':134, 'attrs': 'source_file|input_file|help', 'meths': '__init__|parse'}
+{'type':'edge', 'id':'Instruction_to_Program', 'source':'Instruction', 'target':'Program', 'uml_edge_type': 'composition'}
+{'type':'edge', 'id':'Variable_to_Frame', 'source':'Variable', 'target':'Frame', 'uml_edge_type': 'composition'}
+{'type':'edge', 'id':'Frame_to_FrameSet', 'source':'Frame', 'target':'FrameSet', 'uml_edge_type': 'composition'}
+{'type':'edge', 'id':'FrameSet_to_Program', 'source':'FrameSet', 'target':'Program', 'uml_edge_type': 'composition'}
