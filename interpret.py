@@ -6,7 +6,7 @@ Description: This is an interpreter of IPPcode19 in XML representation
 Author: Michal Pospíšil (xpospi95@stud.fit.vutbr.cz)
 """
 
-import argparse
+from copy import deepcopy
 import getopt
 import itertools
 import sys
@@ -34,7 +34,7 @@ class FrameSet:
 
         elif scope == "TF":
             if self.temporary_frame is None:
-                print("Error: Temporary frame is not defined.", file=sys.stderr)
+                print("interpret.py: Temporary frame is not defined.", file=sys.stderr)
                 sys.exit(55)
 
             self.temporary_frame.set_var(identifier)
@@ -43,11 +43,11 @@ class FrameSet:
             try:
                 self.local_frame_stack[-1].set_var(identifier)
             except IndexError:
-                print("Error: Local frame stack is empty.", file=sys.stderr)
+                print("interpret.py: Local frame stack is empty.", file=sys.stderr)
                 sys.exit(55)
 
         else:
-            print("Error: Unrecognized scope.", file=sys.stderr)
+            print("interpret.py: Unrecognized scope.", file=sys.stderr)
             sys.exit(55)
 
     def update_var(self, name, value, order):
@@ -59,18 +59,28 @@ class FrameSet:
             try:
                 self.global_frame.update_var(identifier, value)
             except KeyError:
-                print("interpret.py:", order, ": Variable", identifier, "doesn't exist.")
+                print("interpret.py:", order, ": Variable ", identifier, " doesn't exist.", file=sys.stderr, sep='')
                 sys.exit(54)
 
         elif scope == "TF":
             if self.temporary_frame is None:
-                print("Error: Temporary frame is not defined.", file=sys.stderr)
+                print("interpret.py:", order, ": Temporary frame is not defined.", file=sys.stderr, sep='')
                 sys.exit(55)
 
             try:
                 self.temporary_frame.update_var(identifier, value)
             except KeyError:
-                print("interpret.py:", order, ": Variable", identifier, "doesn't exist.")
+                print("interpret.py:", order, ": Variable ", identifier, " doesn't exist.", file=sys.stderr, sep='')
+                sys.exit(54)
+
+        elif scope == "LF":
+            try:
+                self.local_frame_stack[-1].update_var(identifier, value)
+            except IndexError:
+                print("interpret.py:", order, ": Local frame stack is empty.", file=sys.stderr, sep='')
+                sys.exit(55)
+            except KeyError:
+                print("interpret.py:", order, ": Variable ", identifier, " doesn't exist.", file=sys.stderr, sep='')
                 sys.exit(54)
 
     def get_var(self, name, order):
@@ -96,8 +106,8 @@ class FrameSet:
             try:
                 retval = self.temporary_frame.get_var(identifier)
             except KeyError:
-                print("interpret.py:", order, ": Variable", identifier, "doesn't exist in the temporary frame.",
-                      file=sys.stderr)
+                print("interpret.py:", order, ": Variable ", identifier, " doesn't exist in the temporary frame.",
+                      file=sys.stderr, sep='')
                 sys.exit(54)
 
             return retval
@@ -106,30 +116,32 @@ class FrameSet:
             try:
                 retval = self.local_frame_stack[-1].get_var(identifier)
             except KeyError:
-                print("Error: Variable", identifier, "doesn't exist in this local frame.", file=sys.stderr)
+                print("interpret.py:", order, ": Variable ", identifier, " doesn't exist in this local frame.",
+                      file=sys.stderr, sep='')
                 sys.exit(54)
             except IndexError:
-                print("Error: Local frame stack is empty.", file=sys.stderr)
+                print("interpret.py:", order, ": Local frame stack is empty.", file=sys.stderr, sep='')
                 sys.exit(55)
 
             return retval
         else:
-            print("Error: Unrecognized scope.", file=sys.stderr)
+            print("interpret.py:", order, ": Unrecognized scope.", file=sys.stderr, sep='')
             sys.exit(55)
 
-    def push_temp(self):
+    def push_temp(self, order):
         if self.temporary_frame is None:
-            print("Error: Temporary frame is not defined.", file=sys.stderr)
+            print("interpret.py:", order, ": Temporary frame is not defined.", file=sys.stderr, sep='')
             sys.exit(55)
 
-        self.local_frame_stack.append(self.temporary_frame)
+        temp_copy = deepcopy(self.temporary_frame)
+        self.local_frame_stack.append(temp_copy)
         self.temporary_frame = None
 
-    def pop_local(self):
+    def pop_local(self, order):
         try:
             self.temporary_frame = self.local_frame_stack.pop()
         except IndexError:
-            print("Error: Local frame stack is empty.", file=sys.stderr)
+            print("interpret.py:", order, ": Local frame stack is empty.", file=sys.stderr, sep='')
             sys.exit(55)
 
 
@@ -231,28 +243,28 @@ class Program:
         try:
             language = program_attr.pop("language")
         except KeyError:
-            print("Error: Program element is missing a language attribute.", file=sys.stderr)
+            print("interpret.py: Program element is missing a language attribute.", file=sys.stderr)
             sys.exit(32)
         if language != "IPPcode19":
-            print("Error: Program element contains an incorrect language attribute.", file=sys.stderr)
+            print("interpret.py: Program element contains an incorrect language attribute.", file=sys.stderr)
             sys.exit(32)
         ## Test for allowed attributes
         allowed_program_attr = {"language", "name", "description"}
         for program_attr in program_attr.keys():
             if program_attr not in allowed_program_attr:
-                print("Error: Invalid attribute in the program element.", file=sys.stderr)
+                print("interpret.py: Invalid attribute in the program element.", file=sys.stderr)
                 sys.exit(32)
 
         # Checking instructions
         for (idx, instruction) in enumerate(self.elem_program.findall("*"), start=1):
             # No instruction elements
             if instruction is None:
-                print("Error: No instruction elements found.", file=sys.stderr)
+                print("interpret.py: No instruction elements found.", file=sys.stderr)
                 sys.exit(32)
 
             # Check that only children are instruction elements
             if instruction.tag != "instruction":
-                print("Error: Invalid element tag in a child element of the program.", file=sys.stderr)
+                print("interpret.py: Invalid child element in the program element.", file=sys.stderr)
                 sys.exit(32)
 
             # Extracting instruction attributes
@@ -261,25 +273,23 @@ class Program:
             try:
                 order = instruction_attr.pop("order")
             except KeyError:
-                print("Error: Undefined order attribute in instruction ", idx, '.', file=sys.stderr)
+                print("interpret.py:", idx, ": Undefined order attribute. (Order of element in document is "
+                      "provided here)", file=sys.stderr, sep='')
                 sys.exit(32)
             ### Convert to int and check value
             try:
                 order = int(order)
             except ValueError:
-                print("interpret.py:", idx, "(in document order): Order attribute contains an invalid value.",
-                      file=sys.stderr)
-                sys.exit(32)
-
-            if order < 1:
-                print("interpret.py:", order, ": Order attribute is not bigger than 0.", file=sys.stderr)
+                print("interpret.py:", idx, ": Order attribute contains an invalid value. (Order of element in "
+                      "document is provided here)", file=sys.stderr, sep='')
                 sys.exit(32)
 
             ## Get opcode
             try:
                 opcode = instruction_attr.pop("opcode").upper()
             except KeyError:
-                print("interpret.py:", order, ": Undefined opcode attribute in instruction ", order, '.', file=sys.stderr)
+                print("interpret.py:", order, ": Undefined opcode attribute in instruction ", order, '.',
+                      file=sys.stderr, sep='')
                 sys.exit(32)
 
             # Getting and checking arguments - at baseline, none are defined
@@ -295,8 +305,8 @@ class Program:
                 try:
                     allowed_arg_tags.pop(argument.tag)
                 except KeyError:
-                    print("Error: Too many, duplicate arguments or unrecognized child element of instruction", order,
-                          '.', file=sys.stderr)
+                    print("interpret.py:", order, ": Too many, duplicate arguments or unrecognized child elements.",
+                          file=sys.stderr, sep='')
                     sys.exit(32)
 
                 # Checking argument attributes
@@ -304,8 +314,8 @@ class Program:
                 try:
                     attr_type = arg_attr.pop("type")
                 except KeyError:
-                    print("Error: Type missing in instruction ", order, ", arg"
-                          '.', file=sys.stderr)
+                    print("interpret.py:", order, ": Attribute type is missing.",
+                          file=sys.stderr, sep='')
                     sys.exit(32)
 
                 ## Element without text returns has text set to None - treating here
@@ -431,7 +441,7 @@ class Instruction:
             # eval expands to a list assignment based on the opcode
             self.expected_arg_types = eval(param_values[name])
         except KeyError:
-            print("Error: Unknown instruction name.", file=sys.stderr)
+            print("interpret.py:", order, ": Unknown instruction name.", file=sys.stderr, sep='')
             sys.exit(32)
 
         # PREEMPTIVE TYPE CHECKING
@@ -443,9 +453,9 @@ class Instruction:
                 if expected_arg_type == "symb" and arg_type in accepted_as_symb:
                     pass
                 else:
-                    print("Error: Argument", arg_num, " in instruction ", self.order, "has incorrect type.",
-                          file=sys.stderr)
-                    sys.exit(53)
+                    print("interpret.py:", self.order, ": Argument ", arg_num, " in instruction has incorrect type.",
+                          file=sys.stderr, sep='')
+                    sys.exit(52)
 
         self.check_arg_syntax()
 
@@ -455,7 +465,8 @@ class Instruction:
     def read_var(self, program_instance, arg_idx, order):
         retval = program_instance.frameset.get_var(self.argv[arg_idx], order)
         if retval.type == "undefined":
-            print("Error: Variable", self.argv[arg_idx], "is undefined.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Variable", self.argv[arg_idx], "is undefined.",
+                  file=sys.stderr, sep='')
             sys.exit(56)
 
         retval = retval.value
@@ -507,10 +518,10 @@ class Instruction:
         program_instance.frameset.init_temporary_frame()
 
     def instr_pushframe(self, program_instance):
-        program_instance.frameset.push_temp()
+        program_instance.frameset.push_temp(self.order)
 
     def instr_popframe(self, program_instance):
-        program_instance.frameset.pop_local()
+        program_instance.frameset.pop_local(self.order)
 
     def instr_return(self, program_instance):
         try:
@@ -590,7 +601,7 @@ class Instruction:
             jumpto = program_instance.labels[self.argv[0]]
         except KeyError:
             print("interpret.py:", self.order, ": Label", self.argv[0], " doesn't exist.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(57)
         program_instance.order_jumpto = jumpto
 
@@ -598,7 +609,7 @@ class Instruction:
         retval = self.read_symb(program_instance, 1, self.order)
         if retval < 0 or retval > 49:
             print("interpret.py:", self.order, ": Invalid exit code.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(57)
 
         sys.exit(retval)
@@ -618,12 +629,12 @@ class Instruction:
                 result = chr(arg2)
             except ValueError:
                 print("interpret.py:", self.order, ": Argument 1 out of range - not a Unicode value.",
-                      file=sys.stderr)
+                      file=sys.stderr, sep='')
                 sys.exit(58)
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
             print("interpret.py:", self.order, ": Last argument must be of type string.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_read(self, program_instance):
@@ -675,7 +686,7 @@ class Instruction:
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
             print("interpret.py:", self.order, ": Last argument must be of type string.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_type(self, program_instance):
@@ -696,7 +707,7 @@ class Instruction:
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
             print("interpret.py:", self.order, ": Last 2 arguments must be of type int, bool or string.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     # 3 ARGUMENTS
@@ -707,7 +718,7 @@ class Instruction:
             result = arg2 + arg3
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Last 2 arguments must be of type int.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type int.", file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_sub(self, program_instance):
@@ -717,7 +728,7 @@ class Instruction:
             result = arg2 - arg3
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Last 2 arguments must be of type int.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type int.", file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_mul(self, program_instance):
@@ -727,7 +738,7 @@ class Instruction:
             result = arg2 * arg3
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Last 2 arguments must be of type int.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type int.", file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_idiv(self, program_instance):
@@ -735,13 +746,13 @@ class Instruction:
         arg3 = self.read_symb(program_instance, 3, self.order)
         if isinstance(arg2, int) and isinstance(arg3, int):
             if arg3 == 0:
-                print("interpret.py:", self.order, ": Division by zero.", file=sys.stderr)
+                print("interpret.py:", self.order, ": Division by zero.", file=sys.stderr, sep='')
                 sys.exit(57)
 
             result = arg2 + arg3
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Last 2 arguments must be of type int.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type int.", file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_lt(self, program_instance):
@@ -757,7 +768,7 @@ class Instruction:
                 program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
         else:
             print("interpret.py:", self.order, ": Last 2 arguments must be of type int, bool or string.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_gt(self, program_instance):
@@ -773,7 +784,7 @@ class Instruction:
                 program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
         else:
             print("interpret.py:", self.order, ": Last 2 arguments must be of type int, bool or string.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_eq(self, program_instance):
@@ -790,7 +801,7 @@ class Instruction:
                 program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
         else:
             print("interpret.py:", self.order, ": Last 2 arguments must be of type int, bool, string or nil.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_and(self, program_instance):
@@ -804,7 +815,7 @@ class Instruction:
                 program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
         else:
             print("interpret.py:", self.order, ": Last 2 arguments must be of type bool.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_or(self, program_instance):
@@ -818,7 +829,7 @@ class Instruction:
                 program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
         else:
             print("interpret.py:", self.order, ": Last 2 arguments must be of type bool.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_stri2int(self, program_instance):
@@ -828,11 +839,12 @@ class Instruction:
             try:
                 result = ord(string[idx])
             except IndexError:
-                print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr)
+                print("interpret.py:", self.order, ": Last 2 arguments must be of type string.",
+                      file=sys.stderr, sep='')
                 sys.exit(58)
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_concat(self, program_instance):
@@ -842,7 +854,7 @@ class Instruction:
             result = arg2 + arg3
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_getchar(self, program_instance):
@@ -852,11 +864,12 @@ class Instruction:
             try:
                 result = string[idx]
             except IndexError:
-                print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr)
+                print("interpret.py:", self.order, ": Last 2 arguments must be of type string.",
+                      file=sys.stderr, sep='')
                 sys.exit(58)
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_setchar(self, program_instance):
@@ -868,11 +881,11 @@ class Instruction:
                 result = string[:idx-1] + char[0] + string[idx:]
             except IndexError:
                 print("interpret.py:", self.order, ": Last 2 arguments must be of type string and last string must be "
-                      "non-empty.", file=sys.stderr)
+                      "non-empty.", file=sys.stderr, sep='')
                 sys.exit(58)
             program_instance.frameset.update_var(self.argv[0], result, self.order)
         else:
-            print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr)
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type string.", file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_jumpifeq(self, program_instance):
@@ -888,12 +901,12 @@ class Instruction:
                     jumpto = program_instance.labels[self.argv[0]]
                 except KeyError:
                     print("interpret.py:", self.order, ": Label", self.argv[0], " doesn't exist.",
-                          file=sys.stderr)
+                          file=sys.stderr, sep='')
                     sys.exit(57)
                 program_instance.order_jumpto = jumpto
         else:
             print("interpret.py:", self.order, ": Last 2 arguments must be of type int, bool, string or nil.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
     def instr_jumpifneq(self, program_instance):
@@ -909,12 +922,12 @@ class Instruction:
                     jumpto = program_instance.labels[self.argv[0]]
                 except KeyError:
                     print("interpret.py:", self.order, ": Label", self.argv[0], " doesn't exist.",
-                          file=sys.stderr)
+                          file=sys.stderr, sep='')
                     sys.exit(57)
                 program_instance.order_jumpto = jumpto
         else:
             print("interpret.py:", self.order, ": Last 2 arguments must be of type int, bool, string or nil.",
-                  file=sys.stderr)
+                  file=sys.stderr, sep='')
             sys.exit(53)
 
 
@@ -973,11 +986,6 @@ class Args:
         sys.exit(0)
 
 
-
-
-
-
-
 """
 SCRIPT EXECUTION POINT
 """
@@ -987,14 +995,14 @@ if args.source_file is not False:
     try:
         source_file = open(args.source_file)
     except IOError:
-        print("Error: File with source code not found.", file=sys.stderr)
+        print("interpret.py: File with source code not found.", file=sys.stderr)
         sys.exit(11)
 
     # Reading code from a file
     try:
         xml_root = xml_et.parse(source_file).getroot()
     except xml_et.ParseError:
-        print("Error: Malformed XML.", file=sys.stderr)
+        print("interpret.py: Malformed XML.", file=sys.stderr)
         sys.exit(31)
 
     source_file.close()
@@ -1005,7 +1013,7 @@ else:
     try:
         xml_root = xml_et.fromstring(source)
     except xml_et.ParseError:
-        print("Error: Malformed XML.", file=sys.stderr)
+        print("interpret.py: Malformed XML.", file=sys.stderr)
         sys.exit(31)
 
     program = Program(xml_root)
@@ -1014,7 +1022,7 @@ if args.input_file is not False:
     try:
         input_file = open(args.input_file)
     except IOError:
-        print("Error: File with inputs not found.", file=sys.stderr)
+        print("interpret.py: File with input not found.", file=sys.stderr)
         sys.exit(11)
 
     program.set_input(input_file)
