@@ -1,5 +1,5 @@
 .ippcode19
 
 DEFvar GF@variable
-MOVE GF@variable string@hello\012\012\012
+MOVE GF@variable string@hello\010\010\010
 write GF@variable
