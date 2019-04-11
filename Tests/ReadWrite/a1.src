@@ -1,0 +1,13 @@
+
+
+.ippCode19
+
+createframe
+defvar TF@hello
+
+READ TF@hello string
+
+WRITE string@Vypíše\032vstup:
+
+PUSHFRAME
+WRITE LF@hello

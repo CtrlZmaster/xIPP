@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<program language="IPPcode19">
+  <instruction order="1" opcode="WRITE">
+    <arg1 type="string">\032ahoj\032svete</arg1>
+  </instruction>
+  <instruction order="2" opcode="WRITE">
+    <arg1 type="string">\010</arg1>
+  </instruction>
+  <instruction order="3" opcode="WRITE">
+    <arg1 type="string">50€</arg1>
+  </instruction>
+  <instruction order="4" opcode="WRITE">
+    <arg1 type="string">\010</arg1>
+  </instruction>
+  <instruction order="5" opcode="WRITE">
+    <arg1 type="string">řetězec\032s\032lomítkem\032\0920\032a\010novým\035řádkem</arg1>
+  </instruction>
+  <instruction order="6" opcode="WRITE">
+    <arg1 type="string">\010</arg1>
+  </instruction>
+  <instruction order="7" opcode="WRITE">
+    <arg1 type="string">nechýba\032@</arg1>
+  </instruction>
+  <instruction order="8" opcode="WRITE">
+    <arg1 type="string">\010</arg1>
+  </instruction>
+  <instruction order="9" opcode="WRITE">
+    <arg1 type="string">😀😂🤩🤐😎</arg1>
+  </instruction>
+  <instruction order="10" opcode="WRITE">
+    <arg1 type="string">\010</arg1>
+  </instruction>
+</program>

@@ -1,9 +1,14 @@
-.IPPcode18
+.IPPcode19
 
 
 
-PUSHS int@-5
-PUSHS int@10
-PUSHS int@354789
-PUSHS int@000
-PUSHS int@+030
+WRITE int@-5
+WRITE string@\010
+WRITE int@10
+WRITE string@\010
+WRITE int@354789
+WRITE string@\010
+WRITE int@000
+WRITE string@\010
+WRITE int@+030
+WRITE string@\010

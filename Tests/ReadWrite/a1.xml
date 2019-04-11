@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<program language="IPPcode19">
+  <instruction order="1" opcode="CREATEFRAME"/>
+  <instruction order="2" opcode="DEFVAR">
+    <arg1 type="var">TF@hello</arg1>
+  </instruction>
+  <instruction order="3" opcode="READ">
+    <arg1 type="var">TF@hello</arg1>
+    <arg2 type="type">string</arg2>
+  </instruction>
+  <instruction order="4" opcode="WRITE">
+    <arg1 type="string">Vypíše\032vstup:</arg1>
+  </instruction>
+  <instruction order="5" opcode="PUSHFRAME"/>
+  <instruction order="6" opcode="WRITE">
+    <arg1 type="var">LF@hello</arg1>
+  </instruction>
+</program>

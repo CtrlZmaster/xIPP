@@ -1,0 +1,9 @@
+.IPPcode19
+
+DEFVAR GF@string
+MOVE GF@string string@\032hello
+DEFVAR GF@nahradittu
+MOVE GF@nahradittu string@hello
+setchar GF@nahradittu int@5 GF@string
+
+wRitE GF@nahrdaittu

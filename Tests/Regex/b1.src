@@ -1,7 +1,15 @@
-.IPPcode18
+.IPPcode19
 
-DEFVAR LF@var1 # Alnum
-DEFVAR GF@_var-2 # Special - Alnum - Special- Alnum
+CREATEFRAME
 DEFVAR TF@var_8 # Alnum - Special - Alnum
+pushframe
+MOVE LF@var_8 string@Testing!\010
+CREATEFRAME
+pushframe
+DEFVAR LF@var1 # Alnum
+popframe
+DEFVAR GF@_var-2 # Special - Alnum - Special- Alnum
+popframe
+WRITE TF@var_8
 DEFVAR TF@-$&%*ff # Special - Alnum
 DEFVAR GF@- # Special
