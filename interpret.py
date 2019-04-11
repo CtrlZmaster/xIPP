@@ -7,6 +7,7 @@ Author: Michal Pospíšil (xpospi95@stud.fit.vutbr.cz)
 """
 
 import argparse
+import getopt
 import itertools
 import sys
 import re
@@ -218,6 +219,10 @@ class Program:
         self.callstack = []             # List of return indices from call instructions to return instructions
         self.order_next = None          # For passing values to callstack (remembers last next instruction)
         self.order_jumpto = None        # For passing values from jump instructions to execution loop
+        self.stdin_file = None          # A file object that contains a file when --input argument was given
+
+    def set_input(self, stdin_file):
+        self.stdin_file = stdin_file
 
     def extract_instructions(self):
         # Check program attributes
@@ -622,7 +627,46 @@ class Instruction:
             sys.exit(53)
 
     def instr_read(self, program_instance):
-        pass
+        if program_instance.stdin_file is not False:
+            text = program_instance.stdin_file.readline()
+            if text != "\n":
+                # Not stripping "\n" because this is an empty line. When EOF is reached, "" is returned,
+                # so it'd also interfere
+                text.strip('\n')
+        else:
+            try:
+                text = input()
+            except EOFError or UnicodeError:
+                text = ""
+
+        # Text conversion
+        # Save implicit value when text == ""
+        type = self.argv[1]
+        if type == "int":
+            # Error string "" will also fail conversion, no need for separate if clause
+            try:
+                converted_int = int(text)
+            except ValueError:
+                converted_int = 0
+            program_instance.frameset.update_var(self.argv[0], converted_int, self.order)
+        elif type == "bool":
+            if text == "":
+                program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
+            else:
+                if text.lower() == "true":
+                    program_instance.frameset.update_var(self.argv[0], "bool@true", self.order)
+                elif text.lower() == "false":
+                    program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
+                else:
+                    # Implicit value when conversion is unsuccessful
+                    program_instance.frameset.update_var(self.argv[0], "bool@false", self.order)
+        elif type == "string":
+            # Implicit value is the same as error value
+            program_instance.frameset.update_var(self.argv[0], text, self.order)
+        else:
+            print("interpret.py:", self.order, ": Variable ", self.argv[0], " is undefined.",
+                  file=sys.stderr, sep='')
+            sys.exit(56)
 
     def instr_strlen(self, program_instance):
         arg2 = self.read_symb(program_instance, 2, self.order)
@@ -875,16 +919,58 @@ class Instruction:
 
 
 class Args:
+    def __init__(self):
+        self.source_file = False
+        self.input_file = False
+        self.help = False
+
+    def parse(self):
+        try:
+            arguments, tail = getopt.getopt(sys.argv[1:], "", ["help", "source=", "input="])
+        except getopt.GetoptError:
+            print("interpret.py: Unknown argument.", file=sys.stderr)
+            sys.exit(10)
+
+        for arg, value in arguments:
+            if   arg == "--source":
+                self.source_file = value
+            elif arg == "--input":
+                self.input_file = value
+            elif arg == "--help":
+                self.help = True
+            else:
+                # Unhandled options
+                pass
+
+        # Argument logic
+        if self.help is True:
+            if self.input_file is not False or self.source_file is not False:
+                print("interpret.py: --help argument must be the only argument.", file=sys.stderr)
+                sys.exit(10)
+            self.print_help()
+
+        if self.source_file is False and self.input_file is False:
+            print("interpret.py: One of --source or --input argument is required.", file=sys.stderr)
+            sys.exit(10)
+
     @staticmethod
-    def parse():
-        parser = argparse.ArgumentParser(add_help=False)
-        group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument("--source")
-        group.add_argument("--input")
-        group.add_argument("--help", action='store_const', const=True)
-        return parser.parse_args()
+    def print_help():
+        print("USAGE:")
+        print("python3.6 interpret.py (--help | --source=SOURCE | --input=INPUT)")
+        print()
+        print("DESCRIPTION:")
+        print("This script interprets code from IPPcode19 XML representation. At least one ")
+        print("of the options must be provided.")
+        print()
+        print("OPTIONS:")
+        print("--help           Shows this help message and exit")
+        print("--source=SOURCE  File SOURCE with the XML representation of IPPcode19 code")
+        print("                 that will be interpreted.")
+        print("--input=INPUT    Expects a text file INPUT that will be provided to the")
+        print("                 script as its standard input. In that case, source code is")
+        print("                 read from stdin.")
 
-
+        sys.exit(0)
 
 
 
@@ -895,36 +981,24 @@ class Args:
 """
 SCRIPT EXECUTION POINT
 """
-args = Args.parse()
-if args.help is True:
-    print('''
-USAGE: 
-python3.6 interpret.py (--help | --source=SOURCE | --input=INPUT)
+args = Args()
+args.parse()
+if args.source_file is not False:
+    try:
+        source_file = open(args.source_file)
+    except IOError:
+        print("Error: File with source code not found.", file=sys.stderr)
+        sys.exit(11)
 
-DESCRIPTION:
-This script interprets code from IPPcode19 XML representation. At least one 
-of the options must be provided.
+    # Reading code from a file
+    try:
+        xml_root = xml_et.parse(source_file).getroot()
+    except xml_et.ParseError:
+        print("Error: Malformed XML.", file=sys.stderr)
+        sys.exit(31)
 
-OPTIONS:
---help           Shows this help message and exit
---source=SOURCE  File SOURCE with the XML representation of IPPcode19 code 
-                 that will be interpreted.
---input=INPUT    Expects a text file INPUT that will be provided to the 
-                 script as its standard input. In that case, source code is
-                 read from stdin.
-''')
-    sys.exit(0)
-
-if args.source is not False:
-    with open(args.source) as source_file:
-        # Reading code from a file
-        try:
-            xml_root = xml_et.parse(source_file).getroot()
-        except xml_et.ParseError:
-            print("Error: Malformed XML.", file=sys.stderr)
-            sys.exit(31)
-
-        program = Program(xml_root)
+    source_file.close()
+    program = Program(xml_root)
 else:
     # Reading code from stdin (source arg not set)
     source = sys.stdin.read()
@@ -936,10 +1010,23 @@ else:
 
     program = Program(xml_root)
 
+if args.input_file is not False:
+    try:
+        input_file = open(args.input_file)
+    except IOError:
+        print("Error: File with inputs not found.", file=sys.stderr)
+        sys.exit(11)
+
+    program.set_input(input_file)
+
 # Now we have a program instance with instructions
 program.extract_instructions()
 
 # Start the interpreter
 program.execute()
+
+# Close the input file
+if program.stdin_file is not None:
+    program.stdin_file.close()
 
 sys.exit(0)
