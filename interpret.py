@@ -304,9 +304,12 @@ class Program:
                     sys.exit(32)
 
                 ## Element without text returns has text set to None - treating here
-                arg_text = decode_escapes(argument.text)
+                arg_text = argument.text
                 if arg_text is None:
                     arg_text = ""
+                else:
+                    # Repairing escape sequences that have escaped backslashes by xml.etree
+                    arg_text = decode_escapes(arg_text)
 
                 # Insert argument and type into the instruction
                 if argument.tag == "arg1":
@@ -505,10 +508,37 @@ class Instruction:
         program_instance.frameset.pop_local()
 
     def instr_return(self, program_instance):
-        pass
+        try:
+            jumpto = program_instance.callstack.pop()
+        except IndexError:
+            print("interpret.py:", self.order, ": Can't return, call stack is empty.",
+                  file=sys.stderr, sep='')
+            sys.exit(56)
+        program_instance.order_jumpto = jumpto
 
     def instr_break(self, program_instance):
-        pass
+        print("Code position (from order attribute):", self.order, file=sys.stderr)
+        print("GLOBAL FRAME:", file=sys.stderr)
+        for name, value in program_instance.frameset.global_frame.vars.items():
+            print("GF@", name, ": ", value, file=sys.stderr, sep='')
+        print(file=sys.stderr)
+        print("TEMPORARY FRAME:", file=sys.stderr)
+        if program_instance.frameset.temporary_frame is None:
+            print("Undefined", file=sys.stderr)
+        else:
+            for name, value in program_instance.frameset.global_frame.vars.items():
+                print("TF@", name, ": ", value, file=sys.stderr, sep='')
+        print(file=sys.stderr)
+
+        frames_under = len(program_instance.frameset.local_frame_stack) - 1
+        print("LOCAL FRAME:", file=sys.stderr)
+        if frames_under < 0:
+            print("Undefined", file=sys.stderr)
+        else:
+            print("Top frame (on top of", frames_under, "frames):", file=sys.stderr)
+            local_frame = program_instance.frameset.local_frame_stack[-1]
+            for name, value in local_frame.items():
+                print("TF@", name, ": ", value, file=sys.stderr, sep='')
 
     # 1 ARGUMENT
     def instr_defvar(self, program_instance):
@@ -516,7 +546,13 @@ class Instruction:
 
     def instr_call(self, program_instance):
         program_instance.callstack.append(program_instance.order_next)
-        program_instance.order_next = None
+        try:
+            jumpto = program_instance.labels[self.argv[0]]
+        except KeyError:
+            print("interpret.py:", self.order, ": Label ", self.argv[0], " doesn't exist.",
+                  file=sys.stderr, sep='')
+            sys.exit(57)
+        program_instance.order_jumpto = jumpto
 
     def instr_pushs(self, program_instance):
         # UNSUPPORTED
@@ -530,13 +566,13 @@ class Instruction:
         retval = self.read_symb(program_instance, 1, self.order)
 
         if retval is True:
-            retval = "bool@true"
+            retval = "true"
 
         if retval is False:
-            retval = "bool@false"
+            retval = "false"
 
         if retval is None:
-            retval = "nil@nil"
+            retval = "nil"
 
         print(retval, end='')
 
@@ -563,7 +599,7 @@ class Instruction:
         sys.exit(retval)
 
     def instr_dprint(self, program_instance):
-        pass
+        print(self.read_symb(program_instance, 1, self.order), end='', file=sys.stderr)
 
     # 2 ARGUMENTS
     def instr_move(self, program_instance):
@@ -571,19 +607,53 @@ class Instruction:
         program_instance.frameset.update_var(self.argv[0], value, self.order)
 
     def instr_int2char(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        if isinstance(arg2, int):
+            try:
+                result = chr(arg2)
+            except ValueError:
+                print("interpret.py:", self.order, ": Argument 1 out of range - not a Unicode value.",
+                      file=sys.stderr)
+                sys.exit(58)
+            program_instance.frameset.update_var(self.argv[0], result, self.order)
+        else:
+            print("interpret.py:", self.order, ": Last argument must be of type string.",
+                  file=sys.stderr)
+            sys.exit(53)
 
     def instr_read(self, program_instance):
         pass
 
     def instr_strlen(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        if isinstance(arg2, str):
+            result = len(arg2)
+            program_instance.frameset.update_var(self.argv[0], result, self.order)
+        else:
+            print("interpret.py:", self.order, ": Last argument must be of type string.",
+                  file=sys.stderr)
+            sys.exit(53)
 
     def instr_type(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        if self.arg_types[1] == "var":
+            result = program_instance.frameset.get_var(arg2, self.order).get_type()
+            if result == "undefined":
+                result = ""
+        else:
+            result = self.arg_types[1]
+
+        program_instance.frameset.update_var(self.argv[0], result, self.order)
 
     def instr_not(self, program_instance):
-        pass
+        arg2 = self.read_symb(program_instance, 2, self.order)
+        if isinstance(arg2, bool):
+            result = not arg2
+            program_instance.frameset.update_var(self.argv[0], result, self.order)
+        else:
+            print("interpret.py:", self.order, ": Last 2 arguments must be of type int, bool or string.",
+                  file=sys.stderr)
+            sys.exit(53)
 
     # 3 ARGUMENTS
     def instr_add(self, program_instance):
