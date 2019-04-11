@@ -444,6 +444,8 @@ class Program:
                           file=sys.stderr, sep='')
                     sys.exit(32)
 
+                # Check attribute type and convert to lowercase
+
                 ## Element without text returns has text set to None - treating here
                 arg_text = argument.text
                 if arg_text is None:
@@ -585,7 +587,7 @@ class Instruction:
                 else:
                     print("interpret.py:", self.order, ": Argument ", arg_num, " in instruction has incorrect type.",
                           file=sys.stderr, sep='')
-                    sys.exit(52)
+                    sys.exit(32)
 
         self.check_arg_syntax()
 
@@ -600,10 +602,10 @@ class Instruction:
 
                @returns true if values match types or value of incorrect operand.
             '''
-            if re.fullmatch(r"(GF|TF|LF)@([A-Za-z]|[_\-$&%*])([A-Za-z\d]|[_\-$&%*])*", var) is None:
+            if re.fullmatch(r"(GF|TF|LF)@([a-zA-Z]|[_\-$&%*])[\w\-$&%*]*", var) is None:
                 print("interpret.py:", self.order, ": Variable/constant ", var, " has incorrect syntax.",
                       file=sys.stderr, sep='')
-                sys.exit(52)
+                sys.exit(32)
 
         def check_symb(symb):
             '''Helper for function check_arg_syntax - checks symbols.
@@ -627,20 +629,22 @@ class Instruction:
                @returns true if values match types or value of incorrect operand.
             '''
 
-            if re.fullmatch(r"([A-Za-z]|[_\-$&%*])(\w|[\-$&%*])*", label) is None:
+            if re.fullmatch(r"[_\-$&%*](\w|[\-$&%*])*", label) is None:
                 print("interpret.py:", self.order, ": Label ", label, " has incorrect syntax.",
                       file=sys.stderr, sep='')
-                sys.exit(52)
+                sys.exit(32)
 
         def check_type(v_type):
             '''Helper for function check_arg_syntax - checks data type name.
 
                @returns True if values match types or value of incorrect operand.
             '''
-            if v_type == "string" or v_type == "int" or v_type == "bool" or v_type == "nil":
+            if v_type == "string" or v_type == "int" or v_type == "bool":
                 return True
-
-            return v_type
+            else:
+                print("interpret.py:", self.order, ": Type ", type, " is not recognized.",
+                      file=sys.stderr, sep='')
+                sys.exit(32)
 
         # Resolve which function to call based on expected_type
         for arg, exp_type in itertools.zip_longest(self.argv, self.expected_arg_types):
