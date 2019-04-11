@@ -317,7 +317,7 @@ def decode_escapes(s):
     escape_sequence_re = re.compile(r'\\([0-9]{3})', re.UNICODE | re.VERBOSE)
 
     def decode_match(match):
-        return codecs.decode(chr(int(match.group(1))), 'unicode-escape')
+        return codecs.decode(chr(int(match.group(1))), 'unicode-escape', 'ignore')
 
     return escape_sequence_re.sub(decode_match, s)
 
@@ -450,9 +450,6 @@ class Program:
                 arg_text = argument.text
                 if arg_text is None:
                     arg_text = ""
-                else:
-                    # Repairing escape sequences that have escaped backslashes by xml.etree
-                    arg_text = decode_escapes(arg_text)
 
                 # Insert argument and type into the instruction
                 if argument.tag == "arg1":
@@ -576,6 +573,8 @@ class Instruction:
             print("interpret.py:", order, ": Unknown instruction name.", file=sys.stderr, sep='')
             sys.exit(32)
 
+        self.check_arg_syntax()
+
         # PREEMPTIVE TYPE CHECKING
         accepted_as_symb = {"int", "bool", "string", "nil", "var"}
         arg_num = 0
@@ -588,8 +587,11 @@ class Instruction:
                     print("interpret.py:", self.order, ": Argument ", arg_num, " in instruction has incorrect type.",
                           file=sys.stderr, sep='')
                     sys.exit(32)
+            # Repairing escape sequences that have escaped backslashes by xml.etree (has to be done after syntax check)
+            if arg_type == "string":
+                self.argv[arg_num - 1] = decode_escapes(self.argv[arg_num - 1])
 
-        self.check_arg_syntax()
+
 
     def check_arg_syntax(self):
         '''Performs syntax checking on symbols
@@ -615,7 +617,7 @@ class Instruction:
             # Can represent variable or constant
             # Checking format of an immediate value - string, int, bool
 
-            if re.fullmatch(r"([^#\\]|(\w))*", symb) is not None or \
+            if re.fullmatch(r"([^#\\]|(\w)|(\\[0-9]{3}))*", symb) is not None or \
                re.fullmatch(r"[+-]?[0-9]+", symb) is not None or \
                re.fullmatch(r"true|false", symb) is not None or \
                re.fullmatch(r"nil", symb) is not None:
@@ -666,6 +668,7 @@ class Instruction:
            @param order Order tag of invoking instruction (for error reporting)
            @return Pythonic variable value
         '''
+        arg_idx = arg_idx - 1
         retval = program_instance.frameset.get_var(self.argv[arg_idx], order)
         if retval.type == "undefined":
             print("interpret.py:", self.order, ": Variable", self.argv[arg_idx], "is undefined.",
@@ -691,9 +694,14 @@ class Instruction:
             retval = self.argv[arg_idx]
 
             if self.arg_types[arg_idx] == "int":
-                retval = int(retval)
+                try:
+                    retval = int(retval)
+                except ValueError:
+                    print("interpret.py:", self.order, ": Argument ", arg_idx + 1, " is not an integer.",
+                          file=sys.stderr, sep='')
+                    sys.exit(52)
 
-            if self.arg_types[arg_idx] == "nil":
+            if self.arg_types[arg_idx] == "nil" and self.argv[arg_idx] == "nil":
                 retval = None
 
             if self.arg_types[arg_idx] == "bool":
@@ -846,12 +854,12 @@ class Instruction:
             sys.exit(53)
 
     def instr_read(self, program_instance):
-        if program_instance.stdin_file is not False:
+        if program_instance.stdin_file is not None:
             text = program_instance.stdin_file.readline()
             if text != "\n":
                 # Not stripping "\n" because this is an empty line. When EOF is reached, "" is returned,
                 # so it'd also interfere
-                text.strip('\n')
+                text = text[:-1]
         else:
             try:
                 text = input()
