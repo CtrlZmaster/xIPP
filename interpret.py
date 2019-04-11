@@ -371,7 +371,7 @@ class Program:
         except KeyError:
             print("interpret.py: Program element is missing a language attribute.", file=sys.stderr)
             sys.exit(32)
-        if language != "IPPcode19":
+        if language.lower() != "ippcode19":
             print("interpret.py: Program element contains an incorrect language attribute.", file=sys.stderr)
             sys.exit(32)
         ## Test for allowed attributes
