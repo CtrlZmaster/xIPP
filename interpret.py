@@ -26,18 +26,18 @@ class FrameSet:
 
            Initializes global frame and creates empty local frame stack and undefined temporary frame.
         '''
-        self.local_frame_stack = []
-        self.global_frame = Frame("global")
-        self.temporary_frame = None
+        self.local_stack = []
+        self.global = {}
+        self.temporary = None
 
     def init_temporary_frame(self):
         '''Initializes the temporary frame
 
             Creates a new instance of a temporary frame. Rewrites the existing temporary frame.
         '''
-        self.temporary_frame = Frame("temporary")
+        self.temporary = {}
 
-    def set_var(self, name):
+    def define_var(self, name):
         '''Defines a variable
 
            Creates an empty variable on a frame defined in variable's name. This function calls a function with the
@@ -50,18 +50,19 @@ class FrameSet:
         identifier = exploded[1]
 
         if scope == "GF":
-            self.global_frame.set_var(identifier)
+            frame = self.global
 
         elif scope == "TF":
             if self.temporary_frame is None:
                 print("interpret.py: Temporary frame is not defined.", file=sys.stderr)
                 sys.exit(55)
+            else:
+                frame = self.temporary
 
-            self.temporary_frame.set_var(identifier)
 
         elif scope == "LF":
             try:
-                self.local_frame_stack[-1].set_var(identifier)
+                frame = self.local_stack[-1]
             except IndexError:
                 print("interpret.py: Local frame stack is empty.", file=sys.stderr)
                 sys.exit(55)
@@ -70,11 +71,21 @@ class FrameSet:
             print("interpret.py: Unrecognized scope.", file=sys.stderr)
             sys.exit(55)
 
+        # And now create a variable on that frame
+        try:
+            frame[identifier]
+        except KeyError:
+            frame[identifier] = Variable()
+            return
+
+        raise KeyError
+
     def update_var(self, name, value, order):
         '''Change value of a variable
 
            Changes value of a variable on the frame defined in variable's name. Any value is supported, current type
            of variable is unimportant.
+           @TODO Change value to accept Pythonic value, raise exceptions
            @param name Name of variable in format (TF|LF|GF)@<var_name>
            @param value Value to be written to the variable (in IPPcode19 syntax)
            @param order Order tag of the invoking instruction - used for error reporting
@@ -111,8 +122,8 @@ class FrameSet:
                 print("interpret.py:", order, ": Variable ", identifier, " doesn't exist.", file=sys.stderr, sep='')
                 sys.exit(54)
 
-    def get_var(self, name, order):
-        '''Get variable as an object
+    def get_var(self, name):
+        '''Get variable's value
 
            Function returns an instance of class Variable that was created during parsing and it's saved in the frame
            defined in variable's name.
@@ -195,6 +206,8 @@ class FrameSet:
 class Frame:
     '''Frame that holds variables
 
+       @TODO Eliminate this entirely
+
        Variables are stored in a dictionary, where keys are variable names without the frame specification and values
        are instances of class Variable.
     '''
@@ -213,13 +226,7 @@ class Frame:
            Creates an instance of class Variable on the frame.
            @param identifier Name of the variable (without frame)
         '''
-        try:
-            self.vars[identifier]
-        except KeyError:
-            self.vars[identifier] = Variable()
-            return
 
-        raise KeyError
 
     def update_var(self, identifier, value):
         '''Changes value of a variable
@@ -425,7 +432,7 @@ class Program:
             arg2_type = None
             arg3 = None
             arg3_type = None
-            allowed_arg_tags = {'arg1': None, 'arg2': None, 'arg3': None}
+            allowed_arg_tags = ['arg1', 'arg2', 'arg3']
             for argument in instruction.findall("*"):
                 # Trying to pop from dictionary with arg tags - fails on unknown and duplicate elements
                 try:
@@ -469,6 +476,7 @@ class Program:
                     self.labels[arg1] = order
 
             self.instructions[order] = Instruction(order, opcode, arg1, arg2, arg3, arg1_type, arg2_type, arg3_type)
+            #TODO? Deal with duplicate order tags
 
     def execute(self):
         '''Main interpreter loop
@@ -506,11 +514,13 @@ class Instruction:
 
     accepted_const = {"int", "bool", "string", "nil"}  # Strings that are accepted as type
 
-    def __init__(self, order, name, arg1, arg2, arg3, arg1_type, arg2_type, arg3_type):
+    def __init__(self, program_ref, order, name, arg_list):
         """Instruction constructor
 
            Takes the order tag for error reporting, opcode and arguments along with types from the XML.
+           @TODO Pass args as a list of pairs [[value1, type1],...]
         """
+        self.program = program_ref
         self.order = order
         self.name = name
         self.argv = []
@@ -611,7 +621,7 @@ class Instruction:
 
         def check_symb(symb):
             '''Helper for function check_arg_syntax - checks symbols.
-               
+
                @returns True if values match types or value of incorrect operand.
             '''
             # Can represent variable or constant
