@@ -71,3 +71,6 @@ fabric.properties
 # Word Auto Backup File
 Backup of *.doc*
 *.tmp
+
+# PyCache
+modules/__pycache__/
